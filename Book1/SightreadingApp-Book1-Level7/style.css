@@ -24,7 +24,7 @@ button {
   cursor: pointer;
 }
 
-.back-btn {
+/* .back-btn {
   position: absolute;
   top: 2em;
   left: 4em;
@@ -39,7 +39,7 @@ button {
 
 .back-btn:hover {
     background: #222;
-}
+} */
 
 .staff {
   display: flex;
