@@ -6,6 +6,7 @@ let STARTNOTES = ['D', 'D1'];
 let STARTINTERVALS = [-12, 0];
 let CURRENT_KEY = 'D minor';
 let previousNote = null;
+let accidentalFlag = false;
 
 const NOTES_Dminor = ['D', 'E1', 'F1', 'G1', 'A1', 'Bb1', 'CS1', 'D1', 'E2', 'F2'];
 const NOTEINTERVALS_Dminor = [-12, -10, -9, -7, -5, -4, -1, 0, 2, 3];
@@ -60,8 +61,13 @@ function generateMeasureImages(isFirst, isBreak, beats, meter) {
   while (remaining > 0) {
     let noteMax = Math.min(remaining, beats); 
     let duration = getRandom([...Array(noteMax).keys()].map(i => i + 1));
-    let note = getRandomNote(NOTES, NOTEINTERVALS, previousNote);
-    
+    let note;
+    do {
+      note = getRandomNote(NOTES, NOTEINTERVALS, previousNote);
+    } while (accidentalFlag && (note.includes('S') || note.includes('b')));
+    if (note.includes('S') || note.includes('b')) {
+      accidentalFlag = true;
+    }
     let folder = ``;
     if (duration === beatsConst) {
       folder = `images/${CURRENT_KEY}/${meter}/barline/${duration}/${note}.jpg`;
@@ -85,7 +91,7 @@ function generateMeasureImages(isFirst, isBreak, beats, meter) {
     measure[0] = measure[0].replace('/internal/', '/break/');
     measure[0] = measure[0].replace('/barline/', '/break/');
   }
-
+  accidentalFlag = false; // Reset accidental flag after each measure
   return measure;
 }
 
@@ -98,7 +104,10 @@ function generateLastMeasureImage(beats, meter) {
   }
   let folder = ``;
   if (firstDuration > 0) {
-    let firstNote = getRandomNote(NOTES, NOTEINTERVALS, previousNote);
+    let firstNote;
+    do {
+      firstNote = getRandomNote(NOTES, NOTEINTERVALS, previousNote);
+    } while (firstNote.includes('S') || firstNote.includes('b'));
     folder = `images/${CURRENT_KEY}/${meter}/internal/${firstDuration}/${firstNote}.jpg`;
     previousNote = firstNote;
     measure.push(folder);

@@ -4,6 +4,7 @@ let CADENCENOTES = ['GS1', 'B1'];
 let CADENCEINTERVALS = [-1, 2];
 let CURRENT_KEY = 'A minor';
 let previousNote = null;
+let accidentalFlag = false;
 
 const NOTES_Aminor = ['A', 'D', 'GS1', 'A1', 'B1', 'C1', 'D1', 'E2', 'F2'];
 const NOTEINTERVALS_Aminor = [-12, -7, -1, 0, 2, 3, 5, 7, 8];
@@ -44,17 +45,23 @@ function generateMeasureImages(isFirst, isBreak, beats, meter) {
   const beatsConst = beats;
 
   beats--;
-  if (isFirst) {
-    beats++;
-  }
-  if (isFirst && beats === 4) {
-    beats--; // Adjust to be one less for the first measure in 4-4 
-  }
+  // if (isFirst) {
+  //   beats++;
+  // }
+  // if (isFirst && beats === 4) {
+  //   beats--; // Adjust to be one less for the first measure in 4-4
+  // }
 
   while (remaining > 0) {
     let noteMax = Math.min(remaining, beats); 
     let duration = getRandom([...Array(noteMax).keys()].map(i => i + 1));
-    let note = getRandomNote(NOTES, NOTEINTERVALS, previousNote);
+    let note;
+    do {
+      note = getRandomNote(NOTES, NOTEINTERVALS, previousNote);
+    } while (accidentalFlag && (note.includes('S') || note.includes('b')));
+    if (note.includes('S') || note.includes('b')) {
+      accidentalFlag = true;
+    }
     let folder = ``;
     if (duration === beatsConst) {
       folder = `images/${CURRENT_KEY}/${meter}/barline/${duration}/${note}.jpg`;
@@ -77,7 +84,7 @@ function generateMeasureImages(isFirst, isBreak, beats, meter) {
     measure[0] = measure[0].replace('/internal/', '/break/');
     measure[0] = measure[0].replace('/barline/', '/break/');
   }
-
+  accidentalFlag = false; // Reset accidental flag after each measure
   return measure;
 }
 
@@ -90,7 +97,13 @@ function generateLastMeasureImage(beats, meter) {
   }
   let folder = ``;
   if (firstDuration > 0) {
-    let firstNote = getRandomNote(NOTES, NOTEINTERVALS, previousNote);
+    let firstNote;
+    do {
+      firstNote = getRandomNote(NOTES, NOTEINTERVALS, previousNote);
+    } while (firstNote.includes('S') || firstNote.includes('b'));
+    if (firstNote.includes('S') || firstNote.includes('b')) {
+      accidentalFlag = true;
+    }
     folder = `images/${CURRENT_KEY}/${meter}/internal/${firstDuration}/${firstNote}.jpg`;
     previousNote = firstNote;
     measure.push(folder);
