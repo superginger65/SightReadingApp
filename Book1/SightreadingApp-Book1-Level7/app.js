@@ -177,3 +177,10 @@ function resetSpeed() {
   slider.value = 100; // Reset the slider to 100
   changeSpeed(100); // Reset the speed to default
 }
+
+const metronomeTrack = document.getElementById('metronome-audio');
+metronomeTrack.addEventListener('ended', endTracks);
+  function endTracks() {
+    metronomeTrack.currentTime = 0;
+    metronomeTrack.play();
+  }
