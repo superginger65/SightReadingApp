@@ -138,6 +138,7 @@ function generateActivity(meter) {
     const masterButton = document.getElementById('metronome-play-pause');
 
     if (masterTrack.paused) {
+      masterTrack.currentTime = 0;
       masterTrack.play();
       masterButton.textContent = '⏸︎';
     }
@@ -163,3 +164,13 @@ function resetSpeed() {
   slider.value = 100; // Reset the slider to 100
   changeSpeed(100); // Reset the speed to default
 }
+
+let metronomeTrack = document.getElementById('metronome-audio');
+metronomeTrack.addEventListener('ended', endTracks);
+
+  function endTracks() {
+    const playButton = document.getElementById('metronome-play-pause');
+    metronomeTrack.pause();
+    metronomeTrack.currentTime = 0;
+    playButton.textContent = '⏵︎';
+  }
