@@ -10,6 +10,7 @@ let EIGHTH_NOTES_HARD = ['A1-B1', 'A1-C1', 'A1-D', 'A1-D1', 'A1-F1', 'B1-A1', 'B
 let EIGHTH_NOTEINTERVALS_HARD = [-3, -3, -3, -3, -3, -1, -1, -1, -1, 0, 0, 0, 0, 2, 2, 2, 2, -8, -8, -8, -7, -7, -7, -7, -5, -5, -5, -5, -5, -3, -1, 0, -10, 2, -8, -7, -5];
 let CURRENT_KEY = 'C Major';
 let previousNote = null;
+let accidentalFlag = false;
 let difficulty = 'easy';
 
 const NOTES_CMajor = ['D', 'E1', 'F1', 'G1', 'A1', 'B1', 'C1', 'D1'];
@@ -40,10 +41,10 @@ const CADENCENOTES_FMajor = ['E1', 'G1', 'C1'];
 const CADENCEINTERVALS_FMajor = [-1, 2, 7];
 const STARTNOTES_FMajor = ['F1'];
 const STARTINTERVALS_FMajor = [0];
-const EIGHTH_NOTES_EASY_FMajor = [];
-const EIGHTH_NOTEINTERVALS_EASY_FMajor = [];
-const EIGHTH_NOTES_HARD_FMajor = [];
-const EIGHTH_NOTEINTERVALS_HARD_FMajor = [];
+const EIGHTH_NOTES_EASY_FMajor = ['A1-Bb1', 'A1-C1', 'A1-D', 'A1-D1', 'A1-F1', 'Bb1-A1', 'Bb1-C1', 'Bb1-G1', 'C1-A1', 'C1-Bb1', 'C1-D1', 'C1-G1', 'D1-A1', 'D1-C1', 'D1-G1', 'E1-Bb1', 'E1-F1', 'E1-G1', 'F1-A1', 'F1-C1', 'F1-D', 'F1-G1', 'G1-Bb1', 'G1-C1', 'G1-D', 'G1-D1', 'G1-F1'];
+const EIGHTH_NOTEINTERVALS_EASY_FMajor = [4, 4, 4, 4, 4, 5, 5, 5, 7, 7, 7, 7, 9, 9, 9, -1, -1, -1, 0, 0, 0, 0, 2, 2, 2, 2, 2];
+const EIGHTH_NOTES_HARD_FMajor = ['A1-Bb1', 'A1-C1', 'A1-D', 'A1-D1', 'A1-F1', 'Bb1-A1', 'Bb1-C1', 'Bb1-G1', 'C1-A1', 'C1-Bb1', 'C1-D1', 'C1-G1', 'D1-A1', 'D1-C1', 'D1-G1', 'E1-Bb1', 'E1-F1', 'E1-G1', 'F1-A1', 'F1-C1', 'F1-D', 'F1-G1', 'G1-Bb1', 'G1-C1', 'G1-D', 'G1-D1', 'G1-F1', 'r-A1', 'r-Bb1', 'r-C1', 'r-D', 'r-D1', 'r-E1', 'r-F1', 'r-G1'];
+const EIGHTH_NOTEINTERVALS_HARD_FMajor = [4, 4, 4, 4, 4, 5, 5, 5, 7, 7, 7, 7, 9, 9, 9, -1, -1, -1, 0, 0, 0, 0, 2, 2, 2, 2, 2, 4, 5, 7, -3, 9, -1, 0, 2];
 
 const NOTES_GMajor = ['D', 'G1', 'A1', 'B1', 'C1', 'D1', 'E2', 'FS2', 'G2'];
 const NOTEINTERVALS_GMajor = [-5, 0, 2, 4, 5, 7, 9, 11, 12];
@@ -51,10 +52,10 @@ const CADENCENOTES_GMajor = ['D', 'A1'];
 const CADENCEINTERVALS_GMajor = [-5, 2];
 const STARTNOTES_GMajor = ['G1'];
 const STARTINTERVALS_GMajor = [0];
-const EIGHTH_NOTES_EASY_GMajor = [];
-const EIGHTH_NOTEINTERVALS_EASY_GMajor = [];
-const EIGHTH_NOTES_HARD_GMajor = [];
-const EIGHTH_NOTEINTERVALS_HARD_GMajor = [];
+const EIGHTH_NOTES_EASY_GMajor = ['A1-A1', 'A1-B1', 'A1-C1', 'A1-D', 'A1-D1', 'A1-F1', 'A1-G1', 'B1-A1', 'B1-C1', 'B1-D1', 'B1-E1', 'B1-FS2', 'B1-G1', 'B1-G2', 'C1-A1', 'C1-B1', 'C1-C1', 'C1-D1', 'C1-E1', 'C1-G1', 'C1-G2', 'D1-A', 'D1-A1', 'D1-B1', 'D1-C1', 'D1-D', 'D1-D1', 'D1-E2', 'D1-FS2', 'D1-G1', 'E1-B1', 'E1-G1', 'E2-B1', 'E2-C1', 'E2-D1', 'E2-FS2', 'E2-G2', 'G1-A1', 'G1-B1', 'G1-C1', 'G1-D', 'G1-D1'];
+const EIGHTH_NOTEINTERVALS_EASY_GMajor = [2, 2, 2, 2, 2, 2, 2, 4, 4, 4, 4, 4, 4, 4, 5, 5, 5, 5, 5, 5, 5, 7, 7, 7, 7, 7, 7, 7, 7, 7, -2, -2, 9, 9, 9, 9, 9, 0, 0, 0, 0, 0];
+const EIGHTH_NOTES_HARD_GMajor = ['A1-A1', 'A1-B1', 'A1-C1', 'A1-D', 'A1-D1', 'A1-F1', 'A1-G1', 'B1-A1', 'B1-C1', 'B1-D1', 'B1-E1', 'B1-FS2', 'B1-G1', 'B1-G2', 'C1-A1', 'C1-B1', 'C1-C1', 'C1-D1', 'C1-E1', 'C1-G1', 'C1-G2', 'D1-A', 'D1-A1', 'D1-B1', 'D1-C1', 'D1-D', 'D1-D1', 'D1-E2', 'D1-FS2', 'D1-G1', 'E1-B1', 'E1-G1', 'E2-B1', 'E2-C1', 'E2-D1', 'E2-FS2', 'E2-G2', 'G1-A1', 'G1-B1', 'G1-C1', 'G1-D', 'G1-D1', 'r-A1', 'r-B1', 'r-C1', 'r-D', 'r-D1', 'r-E1', 'r-G1'];
+const EIGHTH_NOTEINTERVALS_HARD_GMajor = [2, 2, 2, 2, 2, 2, 2, 4, 4, 4, 4, 4, 4, 4, 5, 5, 5, 5, 5, 5, 5, 7, 7, 7, 7, 7, 7, 7, 7, 7, -2, -2, 9, 9, 9, 9, 9, 0, 0, 0, 0, 0, 2, 4, 5, -5, 7, -3, 0];
 
 const NOTES_Aminor = ['A', 'D', 'GS1', 'A1', 'B1', 'C1', 'D1', 'E2', 'F2'];
 const NOTEINTERVALS_Aminor = [-12, -7, -1, 0, 2, 3, 5, 7, 8];
@@ -73,10 +74,10 @@ const CADENCENOTES_Dminor = ['A1', 'CS1', 'E2'];
 const CADENCEINTERVALS_Dminor = [-5, -1, 2];
 const STARTNOTES_Dminor = ['D', 'D1'];
 const STARTINTERVALS_Dminor = [-12, 0];
-const EIGHTH_NOTES_EASY_Dminor = [];
-const EIGHTH_NOTEINTERVALS_EASY_Dminor = [];
-const EIGHTH_NOTES_HARD_Dminor = [];
-const EIGHTH_NOTEINTERVALS_HARD_Dminor = [];
+const EIGHTH_NOTES_EASY_Dminor = ['A1-Bb1', 'A1-CS1', 'A1-D', 'A1-D1', 'A1-F1', 'Bb1-A1', 'Bb1-CS1', 'Bb1-G1', 'CS1-A1', 'CS1-Bb1', 'CS1-D', 'CS1-E2', 'D1-A1', 'D1-CS1', 'D1-G1', 'E1-Bb1', 'E1-F1', 'E1-G1', 'E2-CS1', 'F1-A1', 'F1-C1', 'F1-D', 'F1-G1', 'G1-Bb1', 'G1-C1', 'G1-D', 'G1-D1', 'G1-F1'];
+const EIGHTH_NOTEINTERVALS_EASY_Dminor = [-5, -5, -5, -5, -5, -4, -4, -4, -1, -1, -1, -1, 0, 0, 0, -10, -10, -10, 2, -9, -9, -9, -9, -7, -7, -7, -7, -7];
+const EIGHTH_NOTES_HARD_Dminor = ['A1-Bb1', 'A1-CS1', 'A1-D', 'A1-D1', 'A1-F1', 'Bb1-A1', 'Bb1-CS1', 'Bb1-G1', 'CS1-A1', 'CS1-Bb1', 'CS1-D', 'CS1-E2', 'D1-A1', 'D1-CS1', 'D1-G1', 'E1-Bb1', 'E1-F1', 'E1-G1', 'E2-CS1', 'F1-A1', 'F1-C1', 'F1-D', 'F1-G1', 'G1-Bb1', 'G1-C1', 'G1-D', 'G1-D1', 'G1-F1', 'r-A1', 'r-Bb1', 'r-CS1', 'r-D', 'r-D1', 'r-E1', 'r-F1', 'r-G1'];
+const EIGHTH_NOTEINTERVALS_HARD_Dminor = [-5, -5, -5, -5, -5, -4, -4, -4, -1, -1, -1, -1, 0, 0, 0, -10, -10, -10, 2, -9, -9, -9, -9, -7, -7, -7, -7, -7, -5, -4, -1, -12, 0, -10, -9, -7];
 
 const NOTES_Gminor = ['D', 'G1', 'A1', 'Bb1', 'C1', 'D1', 'E2', 'F2', 'FS2', 'G2'];
 const NOTEINTERVALS_Gminor = [-5, 0, 2, 3, 5, 7, 9, 10, 11, 12];
@@ -143,7 +144,9 @@ function generateMeasureImages(isFirst, isBreak, beats, meter) {
       note = getRandom(EIGHTH_NOTES_HARD, EIGHTH_NOTEINTERVALS_HARD, previousNote);
       isEighth = true;
     }
-
+    if (note.includes('S') || note.includes('b')) {
+      accidentalFlag = true;
+    }
     
     let folder = ``;
     if (duration === beatsConst) {
@@ -167,7 +170,7 @@ function generateMeasureImages(isFirst, isBreak, beats, meter) {
     let startNote = getRandomNote(STARTNOTES, STARTINTERVALS, null);
     measure[0] = measure[0].replace('/internal/', '/start/');
     measure[0] = measure[0].replace('/barline/', '/start/');
-    measure[0] = measure[0].replace(new RegExp(`\\/(${NOTES.join('|')})\\.jpg$`), '.jpg');
+    measure[0] = measure[0].replace(new RegExp(`\\/(${NOTES.join('|')})\\.jpg$`), `.jpg`);
 
   }
   if (isBreak) {
@@ -175,6 +178,7 @@ function generateMeasureImages(isFirst, isBreak, beats, meter) {
     measure[0] = measure[0].replace('/barline/', '/break/');
   }
 
+  accidentalFlag = false; // Reset accidental flag after each measure
   return measure;
 }
 
