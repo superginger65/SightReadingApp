@@ -135,7 +135,11 @@ function generateMeasureImages(isFirst, isBreak, beats, meter) {
     do {
       duration = getRandom([...Array(noteMax).keys()].map(i => i + 1));
     } while (duration === 3); // Prevent duration of 3
-    let note = getRandomNote(NOTES, NOTEINTERVALS, previousNote);
+
+    do {
+      note = getRandomNote(NOTES, NOTEINTERVALS, previousNote);
+    } while (accidentalFlag && (note.includes('S') || note.includes('b')));
+
     if (remaining > 1 && isFirst == false && isBreak == false && duration === 1 && difficulty === 'easy' && Math.random() < 0.5) {
       note = getRandom(EIGHTH_NOTES_EASY, EIGHTH_NOTEINTERVALS_EASY, previousNote);
       isEighth = true;
