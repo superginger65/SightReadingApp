@@ -85,10 +85,10 @@ const CADENCENOTES_Gminor = ['D1', 'FS2'];
 const CADENCEINTERVALS_Gminor = [7, 11];
 const STARTNOTES_Gminor = ['G1'];
 const STARTINTERVALS_Gminor = [0];
-const EIGHTH_NOTES_EASY_Gminor = [];
-const EIGHTH_NOTEINTERVALS_EASY_Gminor = [];
-const EIGHTH_NOTES_HARD_Gminor = [];
-const EIGHTH_NOTEINTERVALS_HARD_Gminor = [];
+const EIGHTH_NOTES_EASY_Gminor = ['A1-A1', 'A1-Bb1', 'A1-C1', 'A1-D', 'A1-D1', 'A1-F1', 'A1-G1', 'Bb1-A1', 'Bb1-C', 'Bb1-G1', 'C1-A1', 'C1-Bb1', 'C1-C1', 'C1-D1', 'C1-E1', 'C1-G1', 'C1-G2', 'D1-A', 'D1-A1', 'D1-C1', 'D1-D', 'D1-D1', 'D1-E2', 'D1-FS2', 'D1-G1', 'E2-C1', 'E2-D1', 'E2-FS2', 'G1-A1', 'G1-Bb1', 'G1-C1', 'G1-D', 'G1-D1'];
+const EIGHTH_NOTEINTERVALS_EASY_Gminor = [2, 2, 2, 2, 2, 2, 2, 3, 3, 3, 5, 5, 5, 5, 5, 5, 5, 7, 7, 7, 7, 7, 7, 7, 7, 9, 9, 9, 0, 0, 0, 0, 0];
+const EIGHTH_NOTES_HARD_Gminor = ['A1-A1', 'A1-Bb1', 'A1-C1', 'A1-D', 'A1-D1', 'A1-F1', 'A1-G1', 'Bb1-A1', 'Bb1-C', 'Bb1-G1', 'C1-A1', 'C1-Bb1', 'C1-C1', 'C1-D1', 'C1-E1', 'C1-G1', 'C1-G2', 'D1-A', 'D1-A1', 'D1-C1', 'D1-D', 'D1-D1', 'D1-E2', 'D1-FS2', 'D1-G1', 'E2-C1', 'E2-D1', 'E2-FS2', 'G1-A1', 'G1-Bb1', 'G1-C1', 'G1-D', 'G1-D1', 'r-A1', 'r-Bb1', 'r-C1', 'r-D', 'r-D1', 'r-G1'];
+const EIGHTH_NOTEINTERVALS_HARD_Gminor = [2, 2, 2, 2, 2, 2, 2, 3, 3, 3, 5, 5, 5, 5, 5, 5, 5, 7, 7, 7, 7, 7, 7, 7, 7, 9, 9, 9, 0, 0, 0, 0, 0, 2, 3, 5, -5, 7, 0];
 
 
 function getRandom(arr) {
@@ -170,7 +170,7 @@ function generateMeasureImages(isFirst, isBreak, beats, meter) {
     let startNote = getRandomNote(STARTNOTES, STARTINTERVALS, null);
     measure[0] = measure[0].replace('/internal/', '/start/');
     measure[0] = measure[0].replace('/barline/', '/start/');
-    measure[0] = measure[0].replace(new RegExp(`\\/(${NOTES.join('|')})\\.jpg$`), `.jpg`);
+    measure[0] = measure[0].replace(new RegExp(`\\/(${NOTES.join('|')})\\.jpg$`), `/${startNote}.jpg`);
 
   }
   if (isBreak) {
