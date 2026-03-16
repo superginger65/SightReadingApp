@@ -141,11 +141,11 @@ function generateMeasureImages(isFirst, isBreak, beats, meter) {
     } while (accidentalFlag && (note.includes('S') || note.includes('b')));
 
     if (remaining > 1 && isFirst == false && isBreak == false && duration === 1 && difficulty === 'easy' && Math.random() < 0.5) {
-      note = getRandom(EIGHTH_NOTES_EASY, EIGHTH_NOTEINTERVALS_EASY, previousNote);
+      note = getRandomNote(EIGHTH_NOTES_EASY, EIGHTH_NOTEINTERVALS_EASY, previousNote);
       isEighth = true;
     }
     else if (remaining > 1 && isFirst == false && isBreak == false && duration === 1 && difficulty === 'hard' && Math.random() < 0.5) {
-      note = getRandom(EIGHTH_NOTES_HARD, EIGHTH_NOTEINTERVALS_HARD, previousNote);
+      note = getRandomNote(EIGHTH_NOTES_HARD, EIGHTH_NOTEINTERVALS_HARD, previousNote);
       isEighth = true;
     }
     if (note.includes('S') || note.includes('b')) {
