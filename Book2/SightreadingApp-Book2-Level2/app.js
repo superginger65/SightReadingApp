@@ -8,6 +8,7 @@ const EIGHTH_NOTES = ['A1-B1', 'A1-C1', 'A1-D', 'A1-D1', 'A1-F1', 'A1-GS1', 'B1-
 const EIGHTH_NOTEINTERVALS = [0, 0, 0, 0, 0, 0, 2, 2, 2, 2, 2, 3, 3, 3, 3, 5, 5, 5, 5, -5, -5, -4, -4, -4, -1, -1, -1, -1];
 let CURRENT_KEY = 'A minor';
 let previousNote = null;
+let accidentalFlag = false;
 
 const NOTES_Aminor = ['A', 'B', 'C', 'D', 'E1', 'F1', 'GS1', 'A1', 'B1']; //Add D1 (5) back when gotten from Alan
 const NOTEINTERVALS_Aminor = [-12, -10, -9, -7, -5, -4, -1, 0, 2];
@@ -56,6 +57,7 @@ function generateMeasureImages(isFirst, isBreak, beats, meter) {
   const measure = [];
   let remaining = beats;
   const beatsConst = beats;
+  let previousDuration = null;
 
   if (beatsConst === 4) {
     beats--;
@@ -71,16 +73,26 @@ function generateMeasureImages(isFirst, isBreak, beats, meter) {
     let isEighth = false;
     let noteMax = Math.min(Math.round(remaining * 2), beats);
     let duration;
+    let note;
     do {
       duration = (getRandom([...Array(noteMax).keys()].map(i => i + 1)) / 2);
     } while (
       duration === 2.5 ||                                                        // No duration of 2.5 (no such folder)
-      (remaining - duration > 0 && remaining - duration < 1) ||                 // Remaining can't land between 0 and 1
+      (remaining - duration > 0 && remaining - duration < 1 && duration !== 1.5) ||  // Remaining can't land between 0 and 1 (except dotted rhythm: 1.5 may leave 0.5)
       (duration === 1.5 && remaining - duration === 0) ||                       // 1.5 can't be the final (barline) note
-      (remaining === beatsConst && (duration === 0.5 || duration === 1.5) && (isFirst || isBreak))      // First note can't be .5 or 1.5
+      (remaining === beatsConst && (duration === 0.5 || duration === 1.5) && (isFirst || isBreak)) ||  // First note can't be .5 or 1.5
+      (duration === 0.5 && previousDuration !== 1.5) ||                         // 0.5 must follow a 1.5 note
+      (duration === 1.5 && remaining !== beatsConst && !(beatsConst === 4 && remaining === 2)) ||  // 1.5 only on beat 1 (any meter) or beat 3 (4/4 only)
+      (remaining - duration === 1.5 && duration !== 1.5)                        // Prevent deadlock: remaining=1.5 is only reachable via a 1.5 note
     );
+    do {
+      note = getRandomNote(NOTES, NOTEINTERVALS, previousNote);
+    }
+    while (accidentalFlag && (note.includes('S') || note.includes('b')));
+    if (note.includes('S') || note.includes('b')) {
+      accidentalFlag = true;
+    }
 
-    let note = getRandomNote(NOTES, NOTEINTERVALS, previousNote);
     if (remaining > 1 && isFirst == false && isBreak == false && duration === 1 && Math.random() < 0.5) {
       note = getRandomNote(EIGHTH_NOTES, EIGHTH_NOTEINTERVALS, previousNote);
       // isEighth = true;
@@ -102,6 +114,7 @@ function generateMeasureImages(isFirst, isBreak, beats, meter) {
     if (previousNote.includes('-')) {
       previousNote = note.substring(note.indexOf('-') + 1);
     }
+    previousDuration = duration;
     remaining -= duration;
   }
   measure[measure.length - 1] = measure[measure.length - 1].replace('/Internal/', '/Barlines/');
@@ -117,6 +130,7 @@ function generateMeasureImages(isFirst, isBreak, beats, meter) {
     measure[0] = measure[0].replace('/Barlines/', '/Break/');
   }
 
+  accidentalFlag = false; // Reset accidental flag at the end of the measure
   return measure;
 }
 
