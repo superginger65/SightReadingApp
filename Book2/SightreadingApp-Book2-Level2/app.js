@@ -82,7 +82,7 @@ function generateMeasureImages(isFirst, isBreak, beats, meter) {
       (duration === 1.5 && remaining - duration === 0) ||                       // 1.5 can't be the final (barline) note
       (remaining === beatsConst && (duration === 0.5 || duration === 1.5) && (isFirst || isBreak)) ||  // First note can't be .5 or 1.5
       (duration === 0.5 && previousDuration !== 1.5) ||                         // 0.5 must follow a 1.5 note
-      (duration === 1.5 && remaining !== beatsConst && !(beatsConst === 4 && remaining === 2)) ||  // 1.5 only on beat 1 (any meter) or beat 3 (4/4 only)
+      (duration === 1.5 && remaining !== beatsConst && !(beatsConst === 4 && remaining === 2) && !(beatsConst === 3 && remaining === 2)) ||  // 1.5 only on beat 1 (any meter), beat 3 (4/4), or beat 2 (3/4)
       (remaining - duration === 1.5 && duration !== 1.5)                        // Prevent deadlock: remaining=1.5 is only reachable via a 1.5 note
     );
     do {
