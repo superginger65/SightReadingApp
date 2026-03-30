@@ -397,7 +397,7 @@ function getRandom(arr) {
   return arr[Math.round(Math.random() * (arr.length - 1))];
 }
 
-function getRandomNote(notes, intervals, previousNote, maxInterval = 4) {
+function getRandomNote(notes, intervals, previousNote, maxInterval = 5) {
   let note, interval;
   let attempts = 0;
   const maxAttempts = 1000;
