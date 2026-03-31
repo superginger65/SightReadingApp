@@ -10,7 +10,7 @@ let CURRENT_KEY = 'A minor';
 let previousNote = null;
 let accidentalFlag = false;
 
-const NOTES_Aminor = ['A', 'B', 'C', 'D', 'E1', 'F1', 'GS1', 'A1', 'B1', 'D1']; //Add D1 (5) back when gotten from Alan
+const NOTES_Aminor = ['A', 'B', 'C', 'D', 'E1', 'F1', 'GS1', 'A1', 'B1', 'D1'];
 const NOTEINTERVALS_Aminor = [-12, -10, -9, -7, -5, -4, -1, 0, 2, 5];
 const CADENCENOTES_Aminor = ['E1', 'GS1', 'B1'];
 const CADENCEINTERVALS_Aminor = [-5, -1, 2];
@@ -95,12 +95,13 @@ function generateMeasureImages(isFirst, isBreak, beats, meter) {
         note = getRandomNote(NOTES, NOTEINTERVALS, previousNote);
       }
       while (accidentalFlag && (note.includes('S') || note.includes('b')));
-      if (note.includes('S') || note.includes('b')) {
-        accidentalFlag = true;
+
+      if (remaining > 1 && !isFirst && !isBreak && duration === 1 && !accidentalFlag && Math.random() < 0.5) {
+        note = getRandomNote(EIGHTH_NOTES, EIGHTH_NOTEINTERVALS, previousNote);
       }
 
-      if (remaining > 1 && !isFirst && !isBreak && duration === 1 && Math.random() < 0.5) {
-        note = getRandomNote(EIGHTH_NOTES, EIGHTH_NOTEINTERVALS, previousNote);
+      if (note.includes('S') || note.includes('b')) {
+        accidentalFlag = true;
       }
 
       if (duration === beatsConst) {
@@ -138,13 +139,21 @@ function generateLastMeasureImage(beats, meter) {
   let folder = ``;
   if (firstDuration > 0) {
     let firstNote = getRandomNote(NOTES, NOTEINTERVALS, previousNote);
+    if (firstNote.includes('S') || firstNote.includes('b')) {
+      accidentalFlag = true;
+    }
     folder = `images/${CURRENT_KEY}/${meter}/Internal/${firstDuration}/${firstNote}.jpg`;
     previousNote = firstNote;
     measure.push(folder);
   }
   let secondDuration = beats - firstDuration - 1;
   secondDuration = getRandom([...Array(secondDuration).keys()].map(i => i + 1));
-  let secondNote = getRandomNote(CADENCENOTES, CADENCEINTERVALS, previousNote);
+  let secondNote;
+  let cadenceAttempts = 0;
+  do {
+    secondNote = getRandomNote(CADENCENOTES, CADENCEINTERVALS, previousNote);
+    cadenceAttempts++;
+  } while (accidentalFlag && (secondNote.includes('S') || secondNote.includes('b')) && cadenceAttempts < 1000);
   folder = `images/${CURRENT_KEY}/${meter}/Final/Penultimate/${secondDuration}/${secondNote}.jpg`;
   measure.push(folder);
 
@@ -152,6 +161,7 @@ function generateLastMeasureImage(beats, meter) {
   folder = `images/${CURRENT_KEY}/${meter}/Final/Final/${lastDuration}.jpg`;
   measure.push(folder);
 
+  accidentalFlag = false;
   return measure;
 }
 
