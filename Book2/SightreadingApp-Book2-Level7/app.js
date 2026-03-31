@@ -412,7 +412,7 @@ function getRandomNote(notes, intervals, previousNote, maxInterval = 5) {
   } while (
     previousNote !== null && (
       Math.abs(interval - NOTEINTERVALS[NOTES.indexOf(previousNote)]) > maxInterval ||
-      (note === previousNote && Math.random() < 0.80) // 80% chance to reject the same note as previous, to encourage more variety
+      (note === previousNote && Math.random() < 0.5) // 50% chance to reject the same note as previous, to encourage more variety
     )
   );
   return note;
