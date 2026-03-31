@@ -233,10 +233,3 @@ metronomeTrack.addEventListener('ended', endTracks);
     metronomeTrack.currentTime = 0;
     playButton.textContent = '⏵︎';
   }
-
-// Listen for a stop command sent from the parent page (e.g. when a Divi toggle hides the iframe)
-window.addEventListener('message', function(event) {
-  if (event.data === 'stopMetronome') {
-    endTracks();
-  }
-});
