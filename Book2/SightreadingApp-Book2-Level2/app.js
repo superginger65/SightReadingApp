@@ -1,23 +1,23 @@
-const NOTES = ['A', 'B', 'C', 'D', 'E1', 'F1', 'GS1', 'A1', 'B1'];
-const NOTEINTERVALS = [-12, -10, -9, -7, -5, -4, -1, 0, 2];
-const CADENCENOTES = ['E1', 'GS1', 'B1'];
-const CADENCEINTERVALS = [-5, -1, 2];
-const STARTNOTES = ['A', 'A1'];
-const STARTINTERVALS = [-12, 0];
-const EIGHTH_NOTES = ['A1-B1', 'A1-C1', 'A1-D', 'A1-D1', 'A1-F1', 'A1-GS1', 'B1-A1', 'B1-C1', 'B1-D1', 'B1-G1', 'B1-GS1', 'C1-A1', 'C1-B1', 'C1-D1', 'C1-G1', 'D1-A1', 'D1-B1', 'D1-C1', 'D1-GS1', 'E1-F1', 'E1-GS1', 'F1-A1', 'F1-C1', 'F1-D', 'GS1-A1', 'GS1-B1', 'GS1-D1', 'GS1-E1'];
-const EIGHTH_NOTEINTERVALS = [0, 0, 0, 0, 0, 0, 2, 2, 2, 2, 2, 3, 3, 3, 3, 5, 5, 5, 5, -5, -5, -4, -4, -4, -1, -1, -1, -1];
+let NOTES = ['A', 'B', 'C', 'D', 'E1', 'F1', 'GS1', 'A1', 'B1', 'D1'];
+let NOTEINTERVALS = [-12, -10, -9, -7, -5, -4, -1, 0, 2, 5];
+let CADENCENOTES = ['E1', 'GS1', 'B1'];
+let CADENCEINTERVALS = [-5, -1, 2];
+let STARTNOTES = ['A', 'A1'];
+let STARTINTERVALS = [-12, 0];
+let EIGHTH_NOTES = ['A1-B1', 'A1-C1', 'A1-D', 'A1-D1', 'A1-F1', 'A1-GS1', 'B1-A1', 'B1-D1', 'B1-GS1', 'D1-A1', 'D1-B1', 'D1-GS1', 'E1-F1', 'E1-GS1', 'F1-A1', 'F1-D', 'GS1-A1', 'GS1-B1', 'GS1-D1', 'GS1-E1'];
+let EIGHTH_NOTEINTERVALS = [0, 0, 0, 0, 0, 0, 2, 2, 2, 5, 5, 5, -5, -5, -4, -4, -1, -1, -1, -1];
 let CURRENT_KEY = 'A minor';
 let previousNote = null;
 let accidentalFlag = false;
 
-const NOTES_Aminor = ['A', 'B', 'C', 'D', 'E1', 'F1', 'GS1', 'A1', 'B1']; //Add D1 (5) back when gotten from Alan
-const NOTEINTERVALS_Aminor = [-12, -10, -9, -7, -5, -4, -1, 0, 2];
+const NOTES_Aminor = ['A', 'B', 'C', 'D', 'E1', 'F1', 'GS1', 'A1', 'B1', 'D1']; //Add D1 (5) back when gotten from Alan
+const NOTEINTERVALS_Aminor = [-12, -10, -9, -7, -5, -4, -1, 0, 2, 5];
 const CADENCENOTES_Aminor = ['E1', 'GS1', 'B1'];
 const CADENCEINTERVALS_Aminor = [-5, -1, 2];
 const STARTNOTES_Aminor = ['A', 'A1'];
 const STARTINTERVALS_Aminor = [-12, 0];
-const EIGHTH_NOTES_Aminor = ['A1-B1', 'A1-C1', 'A1-D', 'A1-D1', 'A1-F1', 'A1-GS1', 'B1-A1', 'B1-C1', 'B1-D1', 'B1-G1', 'B1-GS1', 'C1-A1', 'C1-B1', 'C1-D1', 'C1-G1', 'D1-A1', 'D1-B1', 'D1-C1', 'D1-GS1', 'E1-F1', 'E1-GS1', 'F1-A1', 'F1-C1', 'F1-D', 'GS1-A1', 'GS1-B1', 'GS1-D1', 'GS1-E1'];
-const EIGHTH_NOTEINTERVALS_Aminor = [0, 0, 0, 0, 0, 0, 2, 2, 2, 2, 2, 3, 3, 3, 3, 5, 5, 5, 5, -5, -5, -4, -4, -4, -1, -1, -1, -1];
+const EIGHTH_NOTES_Aminor = ['A1-B1', 'A1-C1', 'A1-D', 'A1-D1', 'A1-F1', 'A1-GS1', 'B1-A1', 'B1-D1', 'B1-GS1', 'D1-A1', 'D1-B1', 'D1-GS1', 'E1-F1', 'E1-GS1', 'F1-A1', 'F1-D', 'GS1-A1', 'GS1-B1', 'GS1-D1', 'GS1-E1'];
+const EIGHTH_NOTEINTERVALS_Aminor = [0, 0, 0, 0, 0, 0, 2, 2, 2, 5, 5, 5, -5, -5, -4, -4, -1, -1, -1, -1];
 
 const NOTES_Eminor = ['E', 'FS', 'G', 'A', 'B', 'C', 'DS', 'E1', 'FS1', 'G1', 'A1', 'B1'];
 const NOTEINTERVALS_Eminor = [-12, -10, -9, -7, -5, -4, -1, 0, 2, 3, 5, 7];
@@ -25,8 +25,8 @@ const CADENCENOTES_Eminor = ['DS', 'FS1'];
 const CADENCEINTERVALS_Eminor = [-1, 2];
 const STARTNOTES_Eminor = ['E', 'E1'];
 const STARTINTERVALS_Eminor = [-12, 0];
-const EIGHTH_NOTES_Eminor = ['A1-B1', 'A1-C1', 'A-B', 'A-C', 'A-G', 'B1-A1', 'B1-C1', 'B1-G1', 'B-A', 'B-C', 'C1-A1', 'C1-B1', 'C1-G1', 'DS-E1', 'E1-B1', 'E1-FS1', 'G1-FS1', 'G-A'];
-const EIGHTH_NOTEINTERVALS_Eminor = [5, 5, -7, -7, -7, 7, 7, 7, -5, -5, 8, 8, 8, -1, 0, 0, 3, 9];
+const EIGHTH_NOTES_Eminor = ['A1-B1', 'A-B', 'A-C', 'A-G', 'B1-A1', 'B1-G1', 'B-A', 'DS-E1', 'E1-B1', 'E1-FS1', 'G1-FS1', 'G-A'];
+const EIGHTH_NOTEINTERVALS_Eminor = [5, -7, -7, -7, 7, 7, -5, -1, 0, 0, 3, 9];
 
 
 function getRandom(arr) {
@@ -34,9 +34,12 @@ function getRandom(arr) {
 }
 
 function getRandomNote(notes, intervals, previousNote) {
+  if (previousNote === -1) {
+    return getRandom(notes);
+  }
   let note, interval;
   let attempts = 0;
-  const maxAttempts = 20;
+  const maxAttempts = 1000; // Prevent infinite loop in edge cases
   do {
     const index = Math.round(Math.random() * (notes.length - 1));
     note = notes[index];
@@ -85,30 +88,31 @@ function generateMeasureImages(isFirst, isBreak, beats, meter) {
       (duration === 1.5 && remaining !== beatsConst && !(beatsConst === 4 && remaining === 2) && !(beatsConst === 3 && remaining === 2)) ||  // 1.5 only on beat 1 (any meter), beat 3 (4/4), or beat 2 (3/4)
       (remaining - duration === 1.5 && duration !== 1.5)                        // Prevent deadlock: remaining=1.5 is only reachable via a 1.5 note
     );
-    do {
-      note = getRandomNote(NOTES, NOTEINTERVALS, previousNote);
-    }
-    while (accidentalFlag && (note.includes('S') || note.includes('b')));
-    if (note.includes('S') || note.includes('b')) {
-      accidentalFlag = true;
-    }
 
-    if (remaining > 1 && isFirst == false && isBreak == false && duration === 1 && Math.random() < 0.5) {
-      note = getRandomNote(EIGHTH_NOTES, EIGHTH_NOTEINTERVALS, previousNote);
-      // isEighth = true;
-    }
-
-    
     let folder = ``;
-    if (duration === beatsConst) {
-      folder = `images/${CURRENT_KEY}/${meter}/Barlines/${duration}/${note}.jpg`;
+    if (isFirst && measure.length === 0) {
+      note = getRandomNote(STARTNOTES, STARTINTERVALS, null);
+      folder = `images/${CURRENT_KEY}/${meter}/Start/${duration}/${note}.jpg`;
+    } else {
+      do {
+        note = getRandomNote(NOTES, NOTEINTERVALS, previousNote);
+      }
+      while (accidentalFlag && (note.includes('S') || note.includes('b')));
+      if (note.includes('S') || note.includes('b')) {
+        accidentalFlag = true;
+      }
+
+      if (remaining > 1 && !isFirst && !isBreak && duration === 1 && Math.random() < 0.5) {
+        note = getRandomNote(EIGHTH_NOTES, EIGHTH_NOTEINTERVALS, previousNote);
+      }
+
+      if (duration === beatsConst) {
+        folder = `images/${CURRENT_KEY}/${meter}/Barlines/${duration}/${note}.jpg`;
+      } else {
+        folder = `images/${CURRENT_KEY}/${meter}/Internal/${duration}/${note}.jpg`;
+      }
     }
-    // else if (isEighth) {
-    //   folder = `images/${CURRENT_KEY}/${meter}/Internal/Eighths-${difficulty === 'easy' ? 'Easier' : 'Harder'}/${note}.jpg`;
-    // }
-    else {
-      folder = `images/${CURRENT_KEY}/${meter}/Internal/${duration}/${note}.jpg`;
-    }
+
     measure.push(folder);
     previousNote = note;
     if (previousNote.includes('-')) {
@@ -118,13 +122,6 @@ function generateMeasureImages(isFirst, isBreak, beats, meter) {
     remaining -= duration;
   }
   measure[measure.length - 1] = measure[measure.length - 1].replace('/Internal/', '/Barlines/');
-  if (isFirst) {
-      let startNote = getRandomNote(STARTNOTES, STARTINTERVALS, null);
-      measure[0] = measure[0].replace('/Internal/', '/Start/');
-      measure[0] = measure[0].replace('/Barlines/', '/Start/');
-      measure[0] = measure[0].replace(new RegExp(`\\/(${NOTES.join('|')})\\.jpg$`), `/${startNote}.jpg`);
-  
-    }
   if (isBreak) {
     measure[0] = measure[0].replace('/Internal/', '/Break/');
     measure[0] = measure[0].replace('/Barlines/', '/Break/');
@@ -171,6 +168,7 @@ function selectKey(key) {
       STARTNOTES = STARTNOTES_Aminor;
       STARTINTERVALS = STARTINTERVALS_Aminor;
       EIGHTH_NOTES = EIGHTH_NOTES_Aminor;
+      EIGHTH_NOTEINTERVALS = EIGHTH_NOTEINTERVALS_Aminor;
       CURRENT_KEY = 'A minor';
       break;
     case 'E minor':
@@ -181,6 +179,7 @@ function selectKey(key) {
       STARTNOTES = STARTNOTES_Eminor;
       STARTINTERVALS = STARTINTERVALS_Eminor;
       EIGHTH_NOTES = EIGHTH_NOTES_Eminor;
+      EIGHTH_NOTEINTERVALS = EIGHTH_NOTEINTERVALS_Eminor;
       CURRENT_KEY = 'E minor';
       break;
     default:
