@@ -57,26 +57,3 @@ button {
   height: 100px;
   margin: 0px;
 }
-
-#portrait-overlay {
-  display: none;
-  position: fixed;
-  inset: 0;
-  z-index: 9999;
-  background: rgba(0, 0, 0, 0.85);
-  color: white;
-  align-items: center;
-  justify-content: center;
-  text-align: center;
-}
-
-#portrait-overlay-content p {
-  font-size: 1.4em;
-  padding: 1em;
-}
-
-@media (orientation: portrait) and (pointer: coarse) {
-  #portrait-overlay {
-    display: flex;
-  }
-}
