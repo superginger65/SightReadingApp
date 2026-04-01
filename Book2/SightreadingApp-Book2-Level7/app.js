@@ -307,6 +307,26 @@ const KEY_FOLDERS = {
   },
 };
 
+// Leading tone → resolution targets (tonic and/or 5th) for each key
+const LEADING_TONE_RESOLUTIONS = {
+  'C major':  { leadingTone: 'B1',  resolvesTo: ['C1', 'G1'] },
+  'D major':  { leadingTone: 'CS1', resolvesTo: ['D1', 'A1'] },
+  'F major':  { leadingTone: 'E1',  resolvesTo: ['F1', 'C1'] },
+  'G major':  { leadingTone: 'FS2', resolvesTo: ['G1', 'G2', 'D1'] },
+  'A minor':  { leadingTone: 'GS1', resolvesTo: ['A1', 'E1', 'E2'] },
+  'D minor':  { leadingTone: 'CS1', resolvesTo: ['D1', 'A1'] },
+  'G minor':  { leadingTone: 'FS2', resolvesTo: ['G1', 'G2', 'D1'] },
+};
+
+// Check if an eighth-note pair is valid (leading tone as first note must resolve)
+function isValidEighthPair(pair) {
+  const res = LEADING_TONE_RESOLUTIONS[CURRENT_KEY];
+  if (!res) return true;
+  const parts = pair.split('-');
+  if (parts[0] === res.leadingTone && !res.resolvesTo.includes(parts[1])) return false;
+  return true;
+}
+
 // Returns the max available break-point duration for a given key/meter.
 // Most keys only have 1- and 2-beat break folders; some have 3- or 4-beat variants.
 function getMaxBreakDuration(keyFolders, meter, totalBeats) {
@@ -440,17 +460,32 @@ function generateMeasureImages(isFirst, isBreak, beats, meter) {
       duration = getRandom([...Array(noteMax).keys()].map(i => i + 1));
     } while (duration === 3); // Prevent duration of 3
 
-    let note;
-    do {
-      note = getRandomNote(NOTES, NOTEINTERVALS, previousNote);
-    } while (accidentalFlag && (note.includes('S') || note.includes('b') || (CURRENT_KEY === 'G minor' && note === 'F2')));
+    // Check if previous note was a leading tone requiring resolution
+    const ltRes = LEADING_TONE_RESOLUTIONS[CURRENT_KEY];
+    const mustResolve = ltRes && previousNote === ltRes.leadingTone;
 
-    if (remaining > 1 && !isFirst && !isBreak && duration === 1 && !accidentalFlag && difficulty === 'easy' && Math.random() < 0.5) {
-      note = getRandomNote(EIGHTH_NOTES_EASY, EIGHTH_NOTEINTERVALS_EASY, previousNote, 4);
-      isEighth = true;
-    } else if (remaining > 1 && !isFirst && !isBreak && duration === 1 && !accidentalFlag && difficulty === 'hard' && Math.random() < 0.5) {
-      note = getRandomNote(EIGHTH_NOTES_HARD, EIGHTH_NOTEINTERVALS_HARD, previousNote, 4);
-      isEighth = true;
+    let note;
+    if (mustResolve) {
+      // Leading tone must resolve to tonic or 5th
+      note = getRandom(ltRes.resolvesTo);
+    } else {
+      do {
+        note = getRandomNote(NOTES, NOTEINTERVALS, previousNote);
+      } while (accidentalFlag && (note.includes('S') || note.includes('b') || (CURRENT_KEY === 'G minor' && note === 'F2')));
+
+      if (remaining > 1 && !isFirst && !isBreak && duration === 1 && !accidentalFlag && difficulty === 'easy' && Math.random() < 0.5) {
+        const eighthPair = getRandomNote(EIGHTH_NOTES_EASY, EIGHTH_NOTEINTERVALS_EASY, previousNote, 4);
+        if (isValidEighthPair(eighthPair)) {
+          note = eighthPair;
+          isEighth = true;
+        }
+      } else if (remaining > 1 && !isFirst && !isBreak && duration === 1 && !accidentalFlag && difficulty === 'hard' && Math.random() < 0.5) {
+        const eighthPair = getRandomNote(EIGHTH_NOTES_HARD, EIGHTH_NOTEINTERVALS_HARD, previousNote, 4);
+        if (isValidEighthPair(eighthPair)) {
+          note = eighthPair;
+          isEighth = true;
+        }
+      }
     }
 
     if (note.includes('S') || note.includes('b') || (CURRENT_KEY === 'G minor' && note === 'F2')) {
@@ -507,7 +542,9 @@ function generateLastMeasureImage(beats, meter) {
   }
 
   if (firstDuration > 0) {
-    const firstNote = getRandomNote(NOTES, NOTEINTERVALS, previousNote);
+    const ltRes = LEADING_TONE_RESOLUTIONS[CURRENT_KEY];
+    const mustResolve = ltRes && previousNote === ltRes.leadingTone;
+    const firstNote = mustResolve ? getRandom(ltRes.resolvesTo) : getRandomNote(NOTES, NOTEINTERVALS, previousNote);
     if (firstNote.includes('S') || firstNote.includes('b') || (CURRENT_KEY === 'G minor' && firstNote === 'F2')) {
       accidentalFlag = true;
     }
