@@ -25,11 +25,11 @@ function changeSpeed(bpm) {
   masterTrack.playbackRate = speed;
 }
 //Function to Reset the Speed to default
-function resetSpeed() {
-  const slider = document.getElementById('speed');
-  slider.value = 100; // Reset the slider to 100
-  changeSpeed(100); // Reset the speed to default
-}
+// function resetSpeed() {
+//   const slider = document.getElementById('speed');
+//   slider.value = 100; // Reset the slider to 100
+//   changeSpeed(100); // Reset the speed to default
+// }
 
 let metronomeTrack = document.getElementById('metronome-audio');
 metronomeTrack.addEventListener('ended', endTracks);
