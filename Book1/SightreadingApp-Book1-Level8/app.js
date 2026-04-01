@@ -11,6 +11,7 @@ let EIGHTH_NOTEINTERVALS_HARD = [-3, -3, -3, -3, -3, -1, -1, -1, -1, 0, 0, 0, 0,
 let CURRENT_KEY = 'C Major';
 let previousNote = null;
 let accidentalFlag = false;
+let fNaturalUsedInMeasure = false;
 let difficulty = 'easy';
 
 const NOTES_CMajor = ['D', 'E1', 'F1', 'G1', 'A1', 'B1', 'C1', 'D1'];
@@ -91,6 +92,13 @@ const EIGHTH_NOTES_HARD_Gminor = ['A1-A1', 'A1-Bb1', 'A1-C1', 'A1-D', 'A1-D1', '
 const EIGHTH_NOTEINTERVALS_HARD_Gminor = [2, 2, 2, 2, 2, 2, 2, 3, 3, 3, 5, 5, 5, 5, 5, 5, 5, 7, 7, 7, 7, 7, 7, 7, 7, 9, 9, 9, 0, 0, 0, 0, 0, 2, 3, 5, -5, 7, 0];
 
 
+function containsFNatural(note) {
+  // Check if note contains F-natural (F1 or F2) but not F-sharp (FS1 or FS2)
+  return (note.startsWith('F1') || note.startsWith('F2') || 
+          note.includes('-F1') || note.includes('-F2')) && 
+         !note.includes('FS');
+}
+
 function getRandom(arr) {
   return arr[Math.round(Math.random() * (arr.length - 1))];
 }
@@ -119,6 +127,7 @@ function generateMeasureImages(isFirst, isBreak, beats, meter) {
   const measure = [];
   let remaining = beats;
   const beatsConst = beats;
+  fNaturalUsedInMeasure = false; // Reset F-natural flag for this measure
 
   beats--;
   if (isFirst) {
@@ -138,18 +147,26 @@ function generateMeasureImages(isFirst, isBreak, beats, meter) {
 
     do {
       note = getRandomNote(NOTES, NOTEINTERVALS, previousNote);
-    } while (accidentalFlag && (note.includes('S') || note.includes('b')));
+    } while ((accidentalFlag && (note.includes('S') || note.includes('b'))) ||
+             (CURRENT_KEY === 'G minor' && fNaturalUsedInMeasure && containsFNatural(note)));
 
     if (remaining > 1 && isFirst == false && isBreak == false && duration === 1 && difficulty === 'easy' && Math.random() < 0.5) {
-      note = getRandomNote(EIGHTH_NOTES_EASY, EIGHTH_NOTEINTERVALS_EASY, previousNote);
+      do {
+        note = getRandomNote(EIGHTH_NOTES_EASY, EIGHTH_NOTEINTERVALS_EASY, previousNote);
+      } while (CURRENT_KEY === 'G minor' && fNaturalUsedInMeasure && containsFNatural(note));
       isEighth = true;
     }
     else if (remaining > 1 && isFirst == false && isBreak == false && duration === 1 && difficulty === 'hard' && Math.random() < 0.5) {
-      note = getRandomNote(EIGHTH_NOTES_HARD, EIGHTH_NOTEINTERVALS_HARD, previousNote);
+      do {
+        note = getRandomNote(EIGHTH_NOTES_HARD, EIGHTH_NOTEINTERVALS_HARD, previousNote);
+      } while (CURRENT_KEY === 'G minor' && fNaturalUsedInMeasure && containsFNatural(note));
       isEighth = true;
     }
     if (note.includes('S') || note.includes('b')) {
       accidentalFlag = true;
+    }
+    if (CURRENT_KEY === 'G minor' && containsFNatural(note)) {
+      fNaturalUsedInMeasure = true;
     }
     
     let folder = ``;
@@ -183,26 +200,41 @@ function generateMeasureImages(isFirst, isBreak, beats, meter) {
   }
 
   accidentalFlag = false; // Reset accidental flag after each measure
+  fNaturalUsedInMeasure = false; // Reset F-natural flag after each measure
   return measure;
 }
 
 
 function generateLastMeasureImage(beats, meter) { 
   const measure = [];
+  fNaturalUsedInMeasure = false; // Reset F-natural flag for this measure
   let firstDuration = getRandom([0, 1]);
   if (beats === 4) {
     firstDuration = getRandom([1, 2]);
   }
   let folder = ``;
   if (firstDuration > 0) {
-    let firstNote = getRandomNote(NOTES, NOTEINTERVALS, previousNote);
+    let firstNote;
+    do {
+      firstNote = getRandomNote(NOTES, NOTEINTERVALS, previousNote);
+    } while (CURRENT_KEY === 'G minor' && fNaturalUsedInMeasure && containsFNatural(firstNote));
     folder = `images/${CURRENT_KEY}/${meter}/internal/${firstDuration}/${firstNote}.jpg`;
     previousNote = firstNote;
     measure.push(folder);
+    if (firstNote.includes('S') || firstNote.includes('b')) {
+      accidentalFlag = true;
+    }
+    if (CURRENT_KEY === 'G minor' && containsFNatural(firstNote)) {
+      fNaturalUsedInMeasure = true;
+    }
   }
   let secondDuration = beats - firstDuration - 1;
   secondDuration = getRandom([...Array(secondDuration).keys()].map(i => i + 1));
-  let secondNote = getRandomNote(CADENCENOTES, CADENCEINTERVALS, previousNote);
+  let secondNote;
+  do {
+    secondNote = getRandomNote(CADENCENOTES, CADENCEINTERVALS, previousNote);
+  } while ((accidentalFlag && (secondNote.includes('S') || secondNote.includes('b'))) ||
+           (CURRENT_KEY === 'G minor' && fNaturalUsedInMeasure && containsFNatural(secondNote)));
   folder = `images/${CURRENT_KEY}/${meter}/end/cadence/${secondDuration}/${secondNote}.jpg`;
   measure.push(folder);
 
@@ -210,6 +242,8 @@ function generateLastMeasureImage(beats, meter) {
   folder = `images/${CURRENT_KEY}/${meter}/end/final/${lastDuration}.jpg`;
   measure.push(folder);
 
+  accidentalFlag = false; // Reset accidental flag after last measure
+  fNaturalUsedInMeasure = false; // Reset F-natural flag after last measure
   return measure;
 }
 
@@ -223,7 +257,9 @@ function selectKey(key) {
       STARTNOTES = STARTNOTES_CMajor;
       STARTINTERVALS = STARTINTERVALS_CMajor;
       EIGHTH_NOTES_EASY = EIGHTH_NOTES_EASY_CMajor;
+      EIGHTH_NOTEINTERVALS_EASY = EIGHTH_NOTEINTERVALS_EASY_CMajor;
       EIGHTH_NOTES_HARD = EIGHTH_NOTES_HARD_CMajor;
+      EIGHTH_NOTEINTERVALS_HARD = EIGHTH_NOTEINTERVALS_HARD_CMajor;
       CURRENT_KEY = 'C Major';
       break;
     case 'D Major':
@@ -234,7 +270,9 @@ function selectKey(key) {
       STARTNOTES = STARTNOTES_DMajor;
       STARTINTERVALS = STARTINTERVALS_DMajor;
       EIGHTH_NOTES_EASY = EIGHTH_NOTES_EASY_DMajor;
+      EIGHTH_NOTEINTERVALS_EASY = EIGHTH_NOTEINTERVALS_EASY_DMajor;
       EIGHTH_NOTES_HARD = EIGHTH_NOTES_HARD_DMajor;
+      EIGHTH_NOTEINTERVALS_HARD = EIGHTH_NOTEINTERVALS_HARD_DMajor;
       CURRENT_KEY = 'D Major';
       break;
     case 'F Major':
@@ -245,7 +283,9 @@ function selectKey(key) {
       STARTNOTES = STARTNOTES_FMajor;
       STARTINTERVALS = STARTINTERVALS_FMajor;
       EIGHTH_NOTES_EASY = EIGHTH_NOTES_EASY_FMajor;
+      EIGHTH_NOTEINTERVALS_EASY = EIGHTH_NOTEINTERVALS_EASY_FMajor;
       EIGHTH_NOTES_HARD = EIGHTH_NOTES_HARD_FMajor;
+      EIGHTH_NOTEINTERVALS_HARD = EIGHTH_NOTEINTERVALS_HARD_FMajor;
       CURRENT_KEY = 'F Major';
       break;
     case 'G Major':
@@ -256,7 +296,9 @@ function selectKey(key) {
       STARTNOTES = STARTNOTES_GMajor;
       STARTINTERVALS = STARTINTERVALS_GMajor;
       EIGHTH_NOTES_EASY = EIGHTH_NOTES_EASY_GMajor;
+      EIGHTH_NOTEINTERVALS_EASY = EIGHTH_NOTEINTERVALS_EASY_GMajor;
       EIGHTH_NOTES_HARD = EIGHTH_NOTES_HARD_GMajor;
+      EIGHTH_NOTEINTERVALS_HARD = EIGHTH_NOTEINTERVALS_HARD_GMajor;
       CURRENT_KEY = 'G Major';
       break;
     case 'A minor':
@@ -267,7 +309,9 @@ function selectKey(key) {
       STARTNOTES = STARTNOTES_Aminor;
       STARTINTERVALS = STARTINTERVALS_Aminor;
       EIGHTH_NOTES_EASY = EIGHTH_NOTES_EASY_Aminor;
+      EIGHTH_NOTEINTERVALS_EASY = EIGHTH_NOTEINTERVALS_EASY_Aminor;
       EIGHTH_NOTES_HARD = EIGHTH_NOTES_HARD_Aminor;
+      EIGHTH_NOTEINTERVALS_HARD = EIGHTH_NOTEINTERVALS_HARD_Aminor;
       CURRENT_KEY = 'A minor';
       break;
     case 'D minor':
@@ -278,7 +322,9 @@ function selectKey(key) {
       STARTNOTES = STARTNOTES_Dminor;
       STARTINTERVALS = STARTINTERVALS_Dminor;
       EIGHTH_NOTES_EASY = EIGHTH_NOTES_EASY_Dminor;
+      EIGHTH_NOTEINTERVALS_EASY = EIGHTH_NOTEINTERVALS_EASY_Dminor;
       EIGHTH_NOTES_HARD = EIGHTH_NOTES_HARD_Dminor;
+      EIGHTH_NOTEINTERVALS_HARD = EIGHTH_NOTEINTERVALS_HARD_Dminor;
       CURRENT_KEY = 'D minor';
       break;
     case 'G minor':
@@ -289,7 +335,9 @@ function selectKey(key) {
       STARTNOTES = STARTNOTES_Gminor;
       STARTINTERVALS = STARTINTERVALS_Gminor;
       EIGHTH_NOTES_EASY = EIGHTH_NOTES_EASY_Gminor;
+      EIGHTH_NOTEINTERVALS_EASY = EIGHTH_NOTEINTERVALS_EASY_Gminor;
       EIGHTH_NOTES_HARD = EIGHTH_NOTES_HARD_Gminor;
+      EIGHTH_NOTEINTERVALS_HARD = EIGHTH_NOTEINTERVALS_HARD_Gminor;
       CURRENT_KEY = 'G minor';
       break;
     default:
