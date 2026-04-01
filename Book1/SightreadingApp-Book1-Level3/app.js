@@ -4,6 +4,9 @@ const CADENCENOTES = ['G1', 'B1', 'D1'];
 const CADENCEINTERVALS = [-5, -1, 2];
 let previousNote = null;
 
+// Leading tone resolution: B1 resolves to C1 (tonic) or G1 (5th)
+const LEADING_TONE_RESOLUTION = { leadingTone: 'B1', resolvesTo: ['C1', 'G1'] };
+
 function getRandom(arr) {
   return arr[Math.round(Math.random() * (arr.length - 1))];
 }
@@ -42,7 +45,10 @@ function generateMeasureImages(isFirst, isBreak, beats, meter) {
   while (remaining > 0) {
     let noteMax = Math.min(remaining, beats); 
     let duration = getRandom([...Array(noteMax).keys()].map(i => i + 1));
-    let note = getRandomNote(NOTES, NOTEINTERVALS, previousNote);
+    const mustResolve = previousNote === LEADING_TONE_RESOLUTION.leadingTone;
+    let note = mustResolve
+      ? getRandom(LEADING_TONE_RESOLUTION.resolvesTo)
+      : getRandomNote(NOTES, NOTEINTERVALS, previousNote);
     let folder = ``;
     if (duration === beats) {
       folder = `images/${meter}/barline/${duration}/${note}.jpg`;
@@ -78,7 +84,10 @@ function generateLastMeasureImage(beats, meter) {
   }
   let folder = ``;
   if (firstDuration > 0) {
-    let firstNote = getRandomNote(NOTES, NOTEINTERVALS, previousNote);
+    const mustResolve = previousNote === LEADING_TONE_RESOLUTION.leadingTone;
+    let firstNote = mustResolve
+      ? getRandom(LEADING_TONE_RESOLUTION.resolvesTo)
+      : getRandomNote(NOTES, NOTEINTERVALS, previousNote);
     folder = `images/${meter}/internal/${firstDuration}/${firstNote}.jpg`;
     previousNote = firstNote;
     measure.push(folder);

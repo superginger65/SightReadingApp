@@ -5,6 +5,10 @@ const CADENCEINTERVALS = [-1, 2, 7];
 let previousNote = null;
 let accidentalFlag = false;
 
+// Leading tones D and D1 both resolve to Eb1 (tonic) or Bb1 (5th)
+const LEADING_TONES = new Set(['D', 'D1']);
+const LEADING_TONE_TARGETS = ['Eb1', 'Bb1'];
+
 function getRandom(arr) {
   return arr[Math.round(Math.random() * (arr.length - 1))];
 }
@@ -46,10 +50,15 @@ function generateMeasureImages(isFirst, isBreak, beats, meter) {
   while (remaining > 0) {
     let noteMax = Math.min(remaining, beats); 
     let duration = getRandom([...Array(noteMax).keys()].map(i => i + 1));
+    const mustResolve = LEADING_TONES.has(previousNote);
     let note;
-    do {
-      note = getRandomNote(NOTES, NOTEINTERVALS, previousNote);
-    } while (accidentalFlag && (note.includes('S') || note.includes('b')));
+    if (mustResolve) {
+      note = getRandom(LEADING_TONE_TARGETS);
+    } else {
+      do {
+        note = getRandomNote(NOTES, NOTEINTERVALS, previousNote);
+      } while (accidentalFlag && (note.includes('S') || note.includes('b')));
+    }
     if (note.includes('S') || note.includes('b')) {
       accidentalFlag = true;
     }
@@ -89,10 +98,15 @@ function generateLastMeasureImage(beats, meter) {
   }
   let folder = ``;
   if (firstDuration > 0) {
+    const mustResolve = LEADING_TONES.has(previousNote);
     let firstNote;
-    do {
-      firstNote = getRandomNote(NOTES, NOTEINTERVALS, previousNote);
-    } while (firstNote.includes('S') || firstNote.includes('b'));
+    if (mustResolve) {
+      firstNote = getRandom(LEADING_TONE_TARGETS);
+    } else {
+      do {
+        firstNote = getRandomNote(NOTES, NOTEINTERVALS, previousNote);
+      } while (firstNote.includes('S') || firstNote.includes('b'));
+    }
     folder = `images/${meter}/internal/${firstDuration}/${firstNote}.jpg`;
     previousNote = firstNote;
     measure.push(folder);

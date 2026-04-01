@@ -91,6 +91,26 @@ const EIGHTH_NOTEINTERVALS_EASY_Gminor = [2, 2, 2, 2, 2, 2, 2, 3, 3, 3, 5, 5, 5,
 const EIGHTH_NOTES_HARD_Gminor = ['A1-A1', 'A1-Bb1', 'A1-C1', 'A1-D', 'A1-D1', 'A1-F1', 'A1-G1', 'Bb1-A1', 'Bb1-C', 'Bb1-G1', 'C1-A1', 'C1-Bb1', 'C1-C1', 'C1-D1', 'C1-E1', 'C1-G1', 'C1-G2', 'D1-A', 'D1-A1', 'D1-C1', 'D1-D', 'D1-D1', 'D1-E2', 'D1-FS2', 'D1-G1', 'E2-C1', 'E2-D1', 'E2-FS2', 'G1-A1', 'G1-Bb1', 'G1-C1', 'G1-D', 'G1-D1', 'r-A1', 'r-Bb1', 'r-C1', 'r-D', 'r-D1', 'r-G1'];
 const EIGHTH_NOTEINTERVALS_HARD_Gminor = [2, 2, 2, 2, 2, 2, 2, 3, 3, 3, 5, 5, 5, 5, 5, 5, 5, 7, 7, 7, 7, 7, 7, 7, 7, 9, 9, 9, 0, 0, 0, 0, 0, 2, 3, 5, -5, 7, 0];
 
+// Leading tone → resolution targets (tonic and 5th) for each key
+const LEADING_TONE_RESOLUTIONS = {
+  'C Major': { leadingTone: 'B1',  resolvesTo: ['C1', 'G1'] },
+  'D Major': { leadingTone: 'CS1', resolvesTo: ['D1', 'A1'] },
+  'F Major': { leadingTone: 'E1',  resolvesTo: ['F1', 'C1'] },
+  'G Major': { leadingTone: 'FS2', resolvesTo: ['G1', 'G2', 'D1'] },
+  'A minor': { leadingTone: 'GS1', resolvesTo: ['A1', 'E2'] },
+  'D minor': { leadingTone: 'CS1', resolvesTo: ['D1', 'A1'] },
+  'G minor': { leadingTone: 'FS2', resolvesTo: ['G1', 'G2', 'D1'] },
+};
+
+// Check if an eighth-note pair is valid (leading tone as first note must resolve)
+function isValidEighthPair(pair) {
+  const res = LEADING_TONE_RESOLUTIONS[CURRENT_KEY];
+  if (!res) return true;
+  const parts = pair.split('-');
+  if (parts[0] === res.leadingTone && !res.resolvesTo.includes(parts[1])) return false;
+  return true;
+}
+
 
 function containsFNatural(note) {
   // Check if note contains F-natural (F1 or F2) but not F-sharp (FS1 or FS2)
@@ -145,22 +165,31 @@ function generateMeasureImages(isFirst, isBreak, beats, meter) {
       duration = getRandom([...Array(noteMax).keys()].map(i => i + 1));
     } while (duration === 3); // Prevent duration of 3
 
-    do {
-      note = getRandomNote(NOTES, NOTEINTERVALS, previousNote);
-    } while ((accidentalFlag && (note.includes('S') || note.includes('b'))) ||
-             (CURRENT_KEY === 'G minor' && fNaturalUsedInMeasure && containsFNatural(note)));
+    const ltRes = LEADING_TONE_RESOLUTIONS[CURRENT_KEY];
+    const mustResolve = ltRes && previousNote === ltRes.leadingTone;
 
-    if (remaining > 1 && isFirst == false && isBreak == false && duration === 1 && difficulty === 'easy' && Math.random() < 0.5) {
+    if (mustResolve) {
+      note = getRandom(ltRes.resolvesTo);
+    } else {
       do {
-        note = getRandomNote(EIGHTH_NOTES_EASY, EIGHTH_NOTEINTERVALS_EASY, previousNote);
-      } while (CURRENT_KEY === 'G minor' && fNaturalUsedInMeasure && containsFNatural(note));
-      isEighth = true;
-    }
-    else if (remaining > 1 && isFirst == false && isBreak == false && duration === 1 && difficulty === 'hard' && Math.random() < 0.5) {
-      do {
-        note = getRandomNote(EIGHTH_NOTES_HARD, EIGHTH_NOTEINTERVALS_HARD, previousNote);
-      } while (CURRENT_KEY === 'G minor' && fNaturalUsedInMeasure && containsFNatural(note));
-      isEighth = true;
+        note = getRandomNote(NOTES, NOTEINTERVALS, previousNote);
+      } while ((accidentalFlag && (note.includes('S') || note.includes('b'))) ||
+               (CURRENT_KEY === 'G minor' && fNaturalUsedInMeasure && containsFNatural(note)));
+
+      if (remaining > 1 && isFirst == false && isBreak == false && duration === 1 && difficulty === 'easy' && Math.random() < 0.5) {
+        const eighthPair = getRandomNote(EIGHTH_NOTES_EASY, EIGHTH_NOTEINTERVALS_EASY, previousNote);
+        if (isValidEighthPair(eighthPair) && !(CURRENT_KEY === 'G minor' && fNaturalUsedInMeasure && containsFNatural(eighthPair))) {
+          note = eighthPair;
+          isEighth = true;
+        }
+      }
+      else if (remaining > 1 && isFirst == false && isBreak == false && duration === 1 && difficulty === 'hard' && Math.random() < 0.5) {
+        const eighthPair = getRandomNote(EIGHTH_NOTES_HARD, EIGHTH_NOTEINTERVALS_HARD, previousNote);
+        if (isValidEighthPair(eighthPair) && !(CURRENT_KEY === 'G minor' && fNaturalUsedInMeasure && containsFNatural(eighthPair))) {
+          note = eighthPair;
+          isEighth = true;
+        }
+      }
     }
     if (note.includes('S') || note.includes('b')) {
       accidentalFlag = true;
@@ -214,10 +243,16 @@ function generateLastMeasureImage(beats, meter) {
   }
   let folder = ``;
   if (firstDuration > 0) {
+    const ltRes = LEADING_TONE_RESOLUTIONS[CURRENT_KEY];
+    const mustResolve = ltRes && previousNote === ltRes.leadingTone;
     let firstNote;
-    do {
-      firstNote = getRandomNote(NOTES, NOTEINTERVALS, previousNote);
-    } while (CURRENT_KEY === 'G minor' && fNaturalUsedInMeasure && containsFNatural(firstNote));
+    if (mustResolve) {
+      firstNote = getRandom(ltRes.resolvesTo);
+    } else {
+      do {
+        firstNote = getRandomNote(NOTES, NOTEINTERVALS, previousNote);
+      } while (CURRENT_KEY === 'G minor' && fNaturalUsedInMeasure && containsFNatural(firstNote));
+    }
     folder = `images/${CURRENT_KEY}/${meter}/internal/${firstDuration}/${firstNote}.jpg`;
     previousNote = firstNote;
     measure.push(folder);

@@ -22,6 +22,12 @@ const CADENCEINTERVALS_FMajor = [-1, 2, 7];
 const STARTNOTES_FMajor = ['F1'];
 const STARTINTERVALS_FMajor = [0];
 
+// Leading tone → resolution targets (tonic and 5th) for each key
+const LEADING_TONE_RESOLUTIONS = {
+  'D minor': { leadingTone: 'CS1', resolvesTo: ['D1', 'A1'] },
+  'F Major': { leadingTone: 'E1',  resolvesTo: ['F1', 'C1'] },
+};
+
 function getRandom(arr) {
   return arr[Math.round(Math.random() * (arr.length - 1))];
 }
@@ -61,10 +67,16 @@ function generateMeasureImages(isFirst, isBreak, beats, meter) {
   while (remaining > 0) {
     let noteMax = Math.min(remaining, beats); 
     let duration = getRandom([...Array(noteMax).keys()].map(i => i + 1));
+    const ltRes = LEADING_TONE_RESOLUTIONS[CURRENT_KEY];
+    const mustResolve = ltRes && previousNote === ltRes.leadingTone;
     let note;
-    do {
-      note = getRandomNote(NOTES, NOTEINTERVALS, previousNote);
-    } while (accidentalFlag && (note.includes('S') || note.includes('b')));
+    if (mustResolve) {
+      note = getRandom(ltRes.resolvesTo);
+    } else {
+      do {
+        note = getRandomNote(NOTES, NOTEINTERVALS, previousNote);
+      } while (accidentalFlag && (note.includes('S') || note.includes('b')));
+    }
     if (note.includes('S') || note.includes('b')) {
       accidentalFlag = true;
     }
@@ -104,10 +116,16 @@ function generateLastMeasureImage(beats, meter) {
   }
   let folder = ``;
   if (firstDuration > 0) {
+    const ltRes = LEADING_TONE_RESOLUTIONS[CURRENT_KEY];
+    const mustResolve = ltRes && previousNote === ltRes.leadingTone;
     let firstNote;
-    do {
-      firstNote = getRandomNote(NOTES, NOTEINTERVALS, previousNote);
-    } while (firstNote.includes('S') || firstNote.includes('b'));
+    if (mustResolve) {
+      firstNote = getRandom(ltRes.resolvesTo);
+    } else {
+      do {
+        firstNote = getRandomNote(NOTES, NOTEINTERVALS, previousNote);
+      } while (firstNote.includes('S') || firstNote.includes('b'));
+    }
     folder = `images/${CURRENT_KEY}/${meter}/internal/${firstDuration}/${firstNote}.jpg`;
     previousNote = firstNote;
     measure.push(folder);

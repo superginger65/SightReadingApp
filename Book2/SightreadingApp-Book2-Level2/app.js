@@ -28,6 +28,21 @@ const STARTINTERVALS_Eminor = [-12, 0];
 const EIGHTH_NOTES_Eminor = ['A1-B1', 'A-B', 'A-C', 'A-G', 'B1-A1', 'B1-G1', 'B-A', 'DS-E1', 'E1-B1', 'E1-FS1', 'G1-FS1', 'G-A'];
 const EIGHTH_NOTEINTERVALS_Eminor = [5, -7, -7, -7, 7, 7, -5, -1, 0, 0, 3, 9];
 
+// Leading tone → resolution targets (tonic and 5th) for each key
+const LEADING_TONE_RESOLUTIONS = {
+  'A minor': { leadingTone: 'GS1', resolvesTo: ['A1', 'E1'] },
+  'E minor': { leadingTone: 'DS',  resolvesTo: ['E1', 'B'] },
+};
+
+// Check if an eighth-note pair is valid (leading tone as first note must resolve)
+function isValidEighthPair(pair) {
+  const res = LEADING_TONE_RESOLUTIONS[CURRENT_KEY];
+  if (!res) return true;
+  const parts = pair.split('-');
+  if (parts[0] === res.leadingTone && !res.resolvesTo.includes(parts[1])) return false;
+  return true;
+}
+
 
 function getRandom(arr) {
   return arr[Math.round(Math.random() * (arr.length - 1))];
@@ -91,13 +106,25 @@ function generateMeasureImages(isFirst, isBreak, beats, meter) {
       note = getRandomNote(STARTNOTES, STARTINTERVALS, null);
       folder = `images/${CURRENT_KEY}/${meter}/Start/${duration}/${note}.jpg`;
     } else {
-      do {
-        note = getRandomNote(NOTES, NOTEINTERVALS, previousNote);
-      }
-      while (accidentalFlag && (note.includes('S') || note.includes('b')));
+      // Check if previous note was a leading tone requiring resolution
+      const ltRes = LEADING_TONE_RESOLUTIONS[CURRENT_KEY];
+      const mustResolve = ltRes && previousNote === ltRes.leadingTone;
 
-      if (remaining > 1 && !isFirst && !isBreak && duration === 1 && !accidentalFlag && Math.random() < 0.5) {
-        note = getRandomNote(EIGHTH_NOTES, EIGHTH_NOTEINTERVALS, previousNote);
+      if (mustResolve) {
+        // Leading tone must resolve to tonic or 5th
+        note = getRandom(ltRes.resolvesTo);
+      } else {
+        do {
+          note = getRandomNote(NOTES, NOTEINTERVALS, previousNote);
+        }
+        while (accidentalFlag && (note.includes('S') || note.includes('b')));
+
+        if (remaining > 1 && !isFirst && !isBreak && duration === 1 && !accidentalFlag && Math.random() < 0.5) {
+          const eighthPair = getRandomNote(EIGHTH_NOTES, EIGHTH_NOTEINTERVALS, previousNote);
+          if (isValidEighthPair(eighthPair)) {
+            note = eighthPair;
+          }
+        }
       }
 
       if (note.includes('S') || note.includes('b')) {
@@ -138,7 +165,9 @@ function generateLastMeasureImage(beats, meter) {
   }
   let folder = ``;
   if (firstDuration > 0) {
-    let firstNote = getRandomNote(NOTES, NOTEINTERVALS, previousNote);
+    const ltRes = LEADING_TONE_RESOLUTIONS[CURRENT_KEY];
+    const mustResolve = ltRes && previousNote === ltRes.leadingTone;
+    let firstNote = mustResolve ? getRandom(ltRes.resolvesTo) : getRandomNote(NOTES, NOTEINTERVALS, previousNote);
     if (firstNote.includes('S') || firstNote.includes('b')) {
       accidentalFlag = true;
     }

@@ -16,6 +16,12 @@ const NOTEINTERVALS_Gminor = [-5, 0, 2, 3, 5, 7, 9, 10, 11, 12];
 const CADENCENOTES_Gminor = ['D', 'A1'];
 const CADENCEINTERVALS_Gminor = [-5, 2];
 
+// Leading tone → resolution targets (tonic and 5th) for each key
+const LEADING_TONE_RESOLUTIONS = {
+  'A minor': { leadingTone: 'GS1', resolvesTo: ['A1', 'E2'] },
+  'G minor': { leadingTone: 'FS2', resolvesTo: ['G1', 'G2', 'D1'] },
+};
+
 function getRandom(arr) {
   return arr[Math.round(Math.random() * (arr.length - 1))];
 }
@@ -55,10 +61,16 @@ function generateMeasureImages(isFirst, isBreak, beats, meter) {
   while (remaining > 0) {
     let noteMax = Math.min(remaining, beats); 
     let duration = getRandom([...Array(noteMax).keys()].map(i => i + 1));
+    const ltRes = LEADING_TONE_RESOLUTIONS[CURRENT_KEY];
+    const mustResolve = ltRes && previousNote === ltRes.leadingTone;
     let note;
-    do {
-      note = getRandomNote(NOTES, NOTEINTERVALS, previousNote);
-    } while (accidentalFlag && (note.includes('S') || note.includes('b')));
+    if (mustResolve) {
+      note = getRandom(ltRes.resolvesTo);
+    } else {
+      do {
+        note = getRandomNote(NOTES, NOTEINTERVALS, previousNote);
+      } while (accidentalFlag && (note.includes('S') || note.includes('b')));
+    }
     if (note.includes('S') || note.includes('b')) {
       accidentalFlag = true;
     }
@@ -97,10 +109,16 @@ function generateLastMeasureImage(beats, meter) {
   }
   let folder = ``;
   if (firstDuration > 0) {
+    const ltRes = LEADING_TONE_RESOLUTIONS[CURRENT_KEY];
+    const mustResolve = ltRes && previousNote === ltRes.leadingTone;
     let firstNote;
-    do {
-      firstNote = getRandomNote(NOTES, NOTEINTERVALS, previousNote);
-    } while (firstNote.includes('S') || firstNote.includes('b'));
+    if (mustResolve) {
+      firstNote = getRandom(ltRes.resolvesTo);
+    } else {
+      do {
+        firstNote = getRandomNote(NOTES, NOTEINTERVALS, previousNote);
+      } while (firstNote.includes('S') || firstNote.includes('b'));
+    }
     if (firstNote.includes('S') || firstNote.includes('b')) {
       accidentalFlag = true;
     }
