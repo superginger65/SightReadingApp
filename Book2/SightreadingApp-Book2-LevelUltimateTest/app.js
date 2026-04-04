@@ -388,37 +388,71 @@
     // abc += "T:Sight Reading Exercise\n";
     abc += "M:" + meter + "\n";
     abc += "L:1/8\n";
-    abc += "K:" + keyDef.abcKey + "\n";
-
-    const notesPerLine = meter === "3/4" ? 4 : 4; // measures per staff line
+    abc += "%%stretchlast true\n";
+    abc += "K:C\n";
 
     for (let i = 0; i < measures.length; i++) {
       const measure = measures[i];
+      // Track accidentals in effect for each note name this measure.
+      // In K:C, default state is "" (natural) for every note.
+      const accState = {}; // e.g. "C," -> "^"
+      let beatPos = 0; // position in quarter-note units within the measure
       for (let j = 0; j < measure.length; j++) {
         const note = measure[j];
         if (note.isRest) {
           abc += "z" + durationToAbc(note.duration);
         } else {
-          abc += midiToAbc(note.pitch, keyDef) + durationToAbc(note.duration);
+          let noteAbc = midiToAbc(note.pitch, keyDef);
+
+          // Parse accidental prefix and base (letter + octave markers)
+          let acc = "";
+          let base = noteAbc;
+          if (noteAbc[0] === "^" || noteAbc[0] === "_" || noteAbc[0] === "=") {
+            acc = noteAbc[0];
+            base = noteAbc.slice(1);
+          }
+
+          const cur = accState[base] || ""; // "" = natural (K:C default)
+
+          if (acc === cur) {
+            // Same accidental already in effect — omit it
+            noteAbc = base;
+          } else if (acc === "" && cur !== "") {
+            // Need an explicit natural to cancel the previous accidental
+            noteAbc = "=" + base;
+            accState[base] = "";
+          } else {
+            // New accidental — emit it and update state
+            accState[base] = acc;
+          }
+
+          abc += noteAbc + durationToAbc(note.duration);
         }
-        // Beam consecutive eighth notes together by omitting the space
+
+        // Beam eighth notes together only within the same beat.
+        // A "beat" is each quarter-note unit (pos 0, 1, 2, 3...).
+        // Two consecutive eighths beam if they share the same beat.
         const nextNote = measure[j + 1];
         const isEighth = note.duration === 0.5;
         const nextIsEighth = nextNote && nextNote.duration === 0.5;
-        if (!(isEighth && nextIsEighth)) {
+        const curBeat = Math.floor(beatPos);
+        const nextBeatPos = beatPos + note.duration;
+        const nextBeat = Math.floor(nextBeatPos);
+        const sameBeat = curBeat === nextBeat || (nextBeatPos % 1 === 0 && false);
+
+        if (isEighth && nextIsEighth && sameBeat) {
+          // No space — beam together
+        } else {
           abc += " ";
         }
+
+        beatPos = nextBeatPos;
       }
 
       if (i === measures.length - 1) {
         abc += "|]"; // final barline
       } else {
         abc += "| ";
-      }
-
-      // Line break every N measures
-      if ((i + 1) % notesPerLine === 0 && i < measures.length - 1) {
-        abc += "\n";
       }
     }
 
@@ -435,6 +469,11 @@
     ABCJS.renderAbc(el, abcString, {
       responsive: "resize",
       staffwidth: 900,
+      wrap: {
+        minSpacing: 1.5,
+        maxSpacing: 2.8,
+        preferredMeasuresPerLine: 4,
+      },
       paddingtop: 10,
       paddingbottom: 20,
       paddingleft: 20,
