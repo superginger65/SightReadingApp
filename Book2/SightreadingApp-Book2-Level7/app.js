@@ -30,8 +30,8 @@ const CADENCENOTES_DMajor = ['A1', 'CS1', 'E2'];
 const CADENCEINTERVALS_DMajor = [-5, -1, 2];
 const STARTNOTES_DMajor = ['D1'];
 const STARTINTERVALS_DMajor = [0];
-const EIGHTH_NOTES_EASY_DMajor = ['A1-A1', 'A1-B1', 'A1-C1', 'A1-D', 'A1-D1', 'A1-F1', 'A1-G1', 'B1-A1', 'B1-C1', 'B1-CS1', 'B1-D1', 'B1-E1', 'B1-FS2', 'B1-G1', 'B1-G2', 'CS1-D1', 'CS1-E2', 'CS1-G1', 'CS1-G2', 'D1-A1', 'D1-B1', 'D1-D', 'D1-D1', 'D1-E2', 'D1-FS2', 'D1-G1', 'E1-B1', 'E1-G1', 'E2-B1', 'E2-C1', 'E2-CS1', 'E2-D1', 'E2-FS2', 'E2-G2', 'G1-A1', 'G1-B1', 'G1-CS1', 'G1-D', 'G1-D1', 'G1-F1'];
-const EIGHTH_NOTEINTERVALS_EASY_DMajor = [-5,-5,-5,-5,-5,-5,-5, -3,-3,-3,-3,-3,-3,-3,-3, -1,-1,-1,-1, 0,0,0,0,0,0,0, -10,-10, 2,2,2,2,2,2, -7,-7,-7,-7,-7,-7];
+const EIGHTH_NOTES_EASY_DMajor = ['A1-A1', 'A1-B1', 'A1-C1', 'A1-D', 'A1-D1', 'A1-G1', 'B1-A1', 'B1-C1', 'B1-CS1', 'B1-D1', 'B1-E1', 'B1-FS2', 'B1-G1', 'B1-G2', 'CS1-D1', 'CS1-E2', 'CS1-G1', 'CS1-G2', 'D1-A1', 'D1-B1', 'D1-D', 'D1-D1', 'D1-E2', 'D1-FS2', 'D1-G1', 'E1-B1', 'E1-G1', 'E2-B1', 'E2-C1', 'E2-CS1', 'E2-D1', 'E2-FS2', 'E2-G2', 'G1-A1', 'G1-B1', 'G1-CS1', 'G1-D', 'G1-D1'];
+const EIGHTH_NOTEINTERVALS_EASY_DMajor = [-5,-5,-5,-5,-5,-5, -3,-3,-3,-3,-3,-3,-3,-3, -1,-1,-1,-1, 0,0,0,0,0,0,0, -10,-10, 2,2,2,2,2,2, -7,-7,-7,-7,-7];
 const EIGHTH_NOTES_HARD_DMajor = ['A1-A1', 'A1-B1', 'A1-C1', 'A1-D', 'A1-D1', 'A1-F1', 'A1-G1', 'B1-A1', 'B1-C1', 'B1-CS1', 'B1-D1', 'B1-E1', 'B1-FS2', 'B1-G1', 'B1-G2', 'CS1-D1', 'CS1-E2', 'CS1-G1', 'CS1-G2', 'D1-A1', 'D1-B1', 'D1-D', 'D1-D1', 'D1-E2', 'D1-FS2', 'D1-G1', 'E1-B1', 'E1-G1', 'E2-B1', 'E2-C1', 'E2-CS1', 'E2-D1', 'E2-FS2', 'E2-G2', 'G1-A1', 'G1-B1', 'G1-CS1', 'G1-D', 'G1-D1', 'G1-F1', 'r-A1', 'r-B1', 'r-C1', 'r-D', 'r-D1', 'r-E1', 'r-G1'];
 const EIGHTH_NOTEINTERVALS_HARD_DMajor = [-5,-5,-5,-5,-5,-5,-5, -3,-3,-3,-3,-3,-3,-3,-3, -1,-1,-1,-1, 0,0,0,0,0,0,0, -10,-10, 2,2,2,2,2,2, -7,-7,-7,-7,-7,-7, -5,-3,-2,-12,0,-10,-7];
 
@@ -52,8 +52,8 @@ const CADENCENOTES_GMajor = ['D', 'A1'];
 const CADENCEINTERVALS_GMajor = [-5, 2];
 const STARTNOTES_GMajor = ['G1'];
 const STARTINTERVALS_GMajor = [0];
-const EIGHTH_NOTES_EASY_GMajor = ['A1-A1', 'A1-B1', 'A1-C1', 'A1-D', 'A1-D1', 'A1-F1', 'A1-G1', 'B1-A1', 'B1-C1', 'B1-D1', 'B1-E1', 'B1-FS2', 'B1-G1', 'B1-G2', 'C1-A1', 'C1-B1', 'C1-C1', 'C1-D1', 'C1-E1', 'C1-G1', 'C1-G2', 'D1-A', 'D1-A1', 'D1-B1', 'D1-C1', 'D1-D', 'D1-D1', 'D1-E2', 'D1-FS2', 'D1-G1', 'E1-B1', 'E1-G1', 'E2-B1', 'E2-C1', 'E2-D1', 'E2-FS2', 'E2-G2', 'G1-A1', 'G1-B1', 'G1-C1', 'G1-D', 'G1-D1'];
-const EIGHTH_NOTEINTERVALS_EASY_GMajor = [2,2,2,2,2,2,2, 4,4,4,4,4,4,4, 5,5,5,5,5,5,5, 7,7,7,7,7,7,7,7,7, -3,-3, 9,9,9,9,9, 0,0,0,0,0];
+const EIGHTH_NOTES_EASY_GMajor = ['A1-A1', 'A1-B1', 'A1-C1', 'A1-D', 'A1-D1', 'A1-G1', 'B1-A1', 'B1-C1', 'B1-D1', 'B1-E1', 'B1-FS2', 'B1-G1', 'B1-G2', 'C1-A1', 'C1-B1', 'C1-C1', 'C1-D1', 'C1-E1', 'C1-G1', 'C1-G2', 'D1-A', 'D1-A1', 'D1-B1', 'D1-C1', 'D1-D', 'D1-D1', 'D1-E2', 'D1-FS2', 'D1-G1', 'E1-B1', 'E1-G1', 'E2-B1', 'E2-C1', 'E2-D1', 'E2-FS2', 'E2-G2', 'G1-A1', 'G1-B1', 'G1-C1', 'G1-D', 'G1-D1'];
+const EIGHTH_NOTEINTERVALS_EASY_GMajor = [2,2,2,2,2,2, 4,4,4,4,4,4,4, 5,5,5,5,5,5,5, 7,7,7,7,7,7,7,7,7, -3,-3, 9,9,9,9,9, 0,0,0,0,0];
 const EIGHTH_NOTES_HARD_GMajor = ['A1-A1', 'A1-B1', 'A1-C1', 'A1-D', 'A1-D1', 'A1-F1', 'A1-G1', 'B1-A1', 'B1-C1', 'B1-D1', 'B1-E1', 'B1-FS2', 'B1-G1', 'B1-G2', 'C1-A1', 'C1-B1', 'C1-C1', 'C1-D1', 'C1-E1', 'C1-G1', 'C1-G2', 'D1-A', 'D1-A1', 'D1-B1', 'D1-C1', 'D1-D', 'D1-D1', 'D1-E2', 'D1-FS2', 'D1-G1', 'E1-B1', 'E1-G1', 'E2-B1', 'E2-C1', 'E2-D1', 'E2-FS2', 'E2-G2', 'G1-A1', 'G1-B1', 'G1-C1', 'G1-D', 'G1-D1', 'r-A1', 'r-B1', 'r-C1', 'r-D', 'r-D1', 'r-E1', 'r-G1'];
 const EIGHTH_NOTEINTERVALS_HARD_GMajor = [2,2,2,2,2,2,2, 4,4,4,4,4,4,4, 5,5,5,5,5,5,5, 7,7,7,7,7,7,7,7,7, -3,-3, 9,9,9,9,9, 0,0,0,0,0, 2,4,5,-5,7,-3,0];
 
