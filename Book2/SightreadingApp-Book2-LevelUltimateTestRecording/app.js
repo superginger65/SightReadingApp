@@ -1,0 +1,878 @@
+// ============================================================
+// Sight Reading Generator for Classical Guitar — WITH RECORDING & SCORING
+// Uses ABCjs for notation, Web Audio API for pitch detection (YIN)
+// ============================================================
+
+(function () {
+  "use strict";
+
+  // ==========================================================
+  // 1. MUSIC THEORY DATA
+  // ==========================================================
+
+  const NOTE_NAMES = ["C", "^C", "D", "^D", "E", "F", "^F", "G", "^G", "A", "^A", "B"];
+  const FLAT_NAMES = ["C", "_D", "D", "_E", "E", "F", "_G", "G", "_A", "A", "_B", "B"];
+
+  const KEY_DEFS = {
+    "C":  { tonic: 60, mode: "major", abcKey: "C",  usesFlats: false },
+    "G":  { tonic: 55, mode: "major", abcKey: "G",  usesFlats: false },
+    "D":  { tonic: 62, mode: "major", abcKey: "D",  usesFlats: false },
+    "A":  { tonic: 57, mode: "major", abcKey: "A",  usesFlats: false },
+    "F":  { tonic: 53, mode: "major", abcKey: "F",  usesFlats: true  },
+    "Bb": { tonic: 58, mode: "major", abcKey: "Bb", usesFlats: true  },
+    "Am": { tonic: 57, mode: "minor", abcKey: "Am", usesFlats: false },
+    "Em": { tonic: 52, mode: "minor", abcKey: "Em", usesFlats: false },
+    "Dm": { tonic: 62, mode: "minor", abcKey: "Dm", usesFlats: true  },
+  };
+
+  const MAJOR_SCALE = [0, 2, 4, 5, 7, 9, 11];
+  const MINOR_SCALE = [0, 2, 3, 5, 7, 8, 10];
+
+  const RANGE_LOW  = 52;  // E3
+  const RANGE_HIGH = 77;  // F5
+
+  // ==========================================================
+  // 2. SCALE & PITCH UTILITIES
+  // ==========================================================
+
+  function getScalePitches(keyDef) {
+    const pattern = keyDef.mode === "major" ? MAJOR_SCALE : MINOR_SCALE;
+    const pitches = [];
+    for (let oct = -2; oct <= 2; oct++) {
+      for (const offset of pattern) {
+        const p = keyDef.tonic + oct * 12 + offset;
+        if (p >= RANGE_LOW && p <= RANGE_HIGH) pitches.push(p);
+      }
+    }
+    if (keyDef.mode === "minor") {
+      for (let oct = -2; oct <= 2; oct++) {
+        const raised7 = keyDef.tonic + oct * 12 + 11;
+        if (raised7 >= RANGE_LOW && raised7 <= RANGE_HIGH && !pitches.includes(raised7)) {
+          pitches.push(raised7);
+        }
+      }
+    }
+    pitches.sort((a, b) => a - b);
+    return [...new Set(pitches)];
+  }
+
+  function scaleDegree(midi, keyDef) {
+    const pattern = keyDef.mode === "major" ? MAJOR_SCALE : MINOR_SCALE;
+    const interval = ((midi - keyDef.tonic) % 12 + 12) % 12;
+    return pattern.indexOf(interval);
+  }
+
+  function isRaised7th(midi, keyDef) {
+    if (keyDef.mode !== "minor") return false;
+    return ((midi - keyDef.tonic) % 12 + 12) % 12 === 11;
+  }
+
+  function hzToMidi(hz) {
+    return 12 * Math.log2(hz / 440) + 69;
+  }
+
+  function midiToNoteName(midi) {
+    const names = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+    const note = names[Math.round(midi) % 12];
+    const oct = Math.floor(Math.round(midi) / 12) - 1;
+    return note + oct;
+  }
+
+  // ==========================================================
+  // 3. VOICE LEADING ENGINE
+  // ==========================================================
+
+  const DIFFICULTY = {
+    easy: {
+      maxInterval: 4, stepBias: 0.75,
+      rhythms34: ["2", "1", "1 1"],
+      rhythms44: ["2", "1", "1 1", "1 1 1"],
+      restChance: 0.05, allowSyncopation: false,
+    },
+    medium: {
+      maxInterval: 5, stepBias: 0.55,
+      rhythms34: ["2", "1", "1 1", "3", "1/2 1/2 1", "1 1/2 1/2"],
+      rhythms44: ["2", "1", "1 1", "1 1 1", "4", "1/2 1/2 1 1", "2 1 1"],
+      restChance: 0.08, allowSyncopation: false,
+    },
+    hard: {
+      maxInterval: 7, stepBias: 0.40,
+      rhythms34: ["2", "1", "1 1", "3", "1/2 1/2 1", "1 1/2 1/2", "1/2 1/2 1/2 1/2 1/2 1/2"],
+      rhythms44: ["2", "1", "1 1", "1 1 1", "4", "1/2 1/2 1 1", "2 1 1", "1/2 1/2 1/2 1/2 1 1", "3 1"],
+      restChance: 0.10, allowSyncopation: true,
+    }
+  };
+
+  function pickNextPitch(prevPitch, prevInterval, scalePitches, keyDef, diff, beatStrength) {
+    const profile = DIFFICULTY[diff];
+    const idx = scalePitches.indexOf(prevPitch);
+    if (idx === -1) {
+      return scalePitches.reduce((a, b) =>
+        Math.abs(b - prevPitch) < Math.abs(a - prevPitch) ? b : a
+      );
+    }
+
+    const candidates = [];
+    for (let i = 0; i < scalePitches.length; i++) {
+      const pitch = scalePitches[i];
+      const stepsAway = Math.abs(i - idx);
+      const semitonesAway = Math.abs(pitch - prevPitch);
+      if (stepsAway === 0 || stepsAway > profile.maxInterval) continue;
+
+      let weight = 1.0;
+      if (stepsAway <= 2) weight *= (profile.stepBias / 0.3);
+      else weight *= ((1 - profile.stepBias) / 0.7);
+
+      if (prevInterval !== 0) {
+        const prevDir = prevInterval > 0 ? 1 : -1;
+        const curDir = pitch > prevPitch ? 1 : -1;
+        if (Math.abs(prevInterval) > 2 && curDir !== prevDir) weight *= 2.0;
+        if (Math.abs(prevInterval) > 2 && curDir === prevDir && stepsAway > 2) weight *= 0.2;
+      }
+
+      if (semitonesAway === 6) weight *= 0.1;
+
+      if (beatStrength === "strong") {
+        const deg = scaleDegree(pitch, keyDef);
+        if (deg === 0) weight *= 1.8;
+        else if (deg === 4) weight *= 1.4;
+        else if (deg === 2) weight *= 1.2;
+      }
+
+      const mid = (RANGE_LOW + RANGE_HIGH) / 2;
+      weight *= Math.max(0.3, 1 - Math.abs(pitch - mid) / 20);
+
+      if (isRaised7th(pitch, keyDef)) {
+        weight *= (pitch < prevPitch) ? 0.05 : 1.5;
+      }
+      if (isRaised7th(prevPitch, keyDef)) {
+        weight *= (pitch === prevPitch + 1) ? 5.0 : 0.1;
+      }
+
+      candidates.push({ pitch, weight });
+    }
+
+    if (candidates.length === 0) {
+      return scalePitches[Math.floor(Math.random() * scalePitches.length)];
+    }
+    return weightedPick(candidates);
+  }
+
+  function weightedPick(candidates) {
+    const total = candidates.reduce((s, c) => s + c.weight, 0);
+    let r = Math.random() * total;
+    for (const c of candidates) {
+      r -= c.weight;
+      if (r <= 0) return c.pitch;
+    }
+    return candidates[candidates.length - 1].pitch;
+  }
+
+  // ==========================================================
+  // 4. RHYTHM GENERATION
+  // ==========================================================
+
+  function parseRhythm(pattern) {
+    return pattern.split(" ").map(s => {
+      if (s.includes("/")) { const [n, d] = s.split("/").map(Number); return n / d; }
+      return Number(s);
+    });
+  }
+
+  function generateMeasureRhythm(beatsPerMeasure, diff) {
+    const profile = DIFFICULTY[diff];
+    const rhythmPool = beatsPerMeasure === 3 ? profile.rhythms34 : profile.rhythms44;
+    const target = beatsPerMeasure;
+    let attempts = 0;
+    while (attempts < 50) {
+      const pattern = rhythmPool[Math.floor(Math.random() * rhythmPool.length)];
+      const durations = parseRhythm(pattern);
+      const total = durations.reduce((a, b) => a + b, 0);
+      if (total === target) return durations;
+      if (total < target) {
+        const fill = Array(Math.round(target - total)).fill(1);
+        const result = [...durations, ...fill];
+        if (Math.abs(result.reduce((a, b) => a + b, 0) - target) < 0.01) return result;
+      }
+      attempts++;
+    }
+    return Array(beatsPerMeasure).fill(1);
+  }
+
+  // ==========================================================
+  // 5. MELODY GENERATION
+  // ==========================================================
+
+  function generateMelody(keyName, meter, difficulty, numMeasures) {
+    const keyDef = KEY_DEFS[keyName];
+    const scalePitches = getScalePitches(keyDef);
+    const beatsPerMeasure = meter === "3/4" ? 3 : 4;
+    const profile = DIFFICULTY[difficulty];
+
+    const mid = (RANGE_LOW + RANGE_HIGH) / 2;
+    const tonicPitches = scalePitches.filter(p => scaleDegree(p, keyDef) === 0);
+    let currentPitch = tonicPitches.reduce((a, b) =>
+      Math.abs(b - mid) < Math.abs(a - mid) ? b : a
+    );
+
+    let prevInterval = 0;
+    const measures = [];
+
+    for (let m = 0; m < numMeasures; m++) {
+      const isLast = m === numMeasures - 1;
+      const rhythm = isLast
+        ? [beatsPerMeasure]
+        : generateMeasureRhythm(beatsPerMeasure, difficulty);
+
+      const notes = [];
+      let beatPos = 0;
+
+      for (let n = 0; n < rhythm.length; n++) {
+        const dur = rhythm[n];
+        const isStrongBeat = beatPos === 0 || (beatsPerMeasure === 4 && beatPos === 2);
+        const beatStrength = isStrongBeat ? "strong" : "weak";
+
+        if (isLast) {
+          const tonicNear = tonicPitches.reduce((a, b) =>
+            Math.abs(b - currentPitch) < Math.abs(a - currentPitch) ? b : a
+          );
+          notes.push({ pitch: tonicNear, duration: dur, isRest: false });
+          currentPitch = tonicNear;
+        } else {
+          if (Math.random() < profile.restChance && beatPos > 0) {
+            notes.push({ pitch: null, duration: dur, isRest: true });
+          } else {
+            const nextPitch = pickNextPitch(currentPitch, prevInterval, scalePitches, keyDef, difficulty, beatStrength);
+            prevInterval = scalePitches.indexOf(nextPitch) - scalePitches.indexOf(currentPitch);
+            currentPitch = nextPitch;
+            notes.push({ pitch: nextPitch, duration: dur, isRest: false });
+          }
+        }
+        beatPos += dur;
+      }
+      measures.push(notes);
+    }
+
+    return measures;
+  }
+
+  // ==========================================================
+  // 6. ABC CONVERSION & RENDERING
+  // ==========================================================
+
+  function midiToAbc(midi, keyDef) {
+    const noteIndex = ((midi % 12) + 12) % 12;
+    const octave = Math.floor(midi / 12) - 1;
+    const names = keyDef.usesFlats ? FLAT_NAMES : NOTE_NAMES;
+    let name = names[noteIndex];
+    let baseLetter = name.replace(/[\^_=]/g, "");
+    let accidental = name.replace(baseLetter, "");
+    if (octave >= 5) {
+      baseLetter = baseLetter.toLowerCase();
+      return accidental + baseLetter + "'".repeat(octave - 5);
+    } else {
+      baseLetter = baseLetter.toUpperCase();
+      const commas = 4 - octave;
+      return commas > 0 ? accidental + baseLetter + ",".repeat(commas) : accidental + baseLetter;
+    }
+  }
+
+  function durationToAbc(dur) {
+    const eighths = dur * 2;
+    if (eighths === 1) return "";
+    if (eighths === 2) return "2";
+    if (eighths === 3) return "3";
+    if (eighths === 4) return "4";
+    if (eighths === 6) return "6";
+    if (eighths === 8) return "8";
+    if (eighths < 1) return "/" + Math.round(1 / eighths);
+    return String(Math.round(eighths));
+  }
+
+  function melodyToAbc(measures, keyDef, meter) {
+    let abc = "X:1\nM:" + meter + "\nL:1/8\n%%stretchlast true\nK:C\n";
+
+    for (let i = 0; i < measures.length; i++) {
+      const measure = measures[i];
+      const accState = {};
+      let beatPos = 0;
+
+      for (let j = 0; j < measure.length; j++) {
+        const note = measure[j];
+        if (note.isRest) {
+          abc += "z" + durationToAbc(note.duration);
+        } else {
+          let noteAbc = midiToAbc(note.pitch, keyDef);
+          let acc = "";
+          let base = noteAbc;
+          if (/^[\^_=]/.test(noteAbc)) { acc = noteAbc[0]; base = noteAbc.slice(1); }
+          const cur = accState[base] || "";
+          if (acc === cur) noteAbc = base;
+          else if (acc === "" && cur !== "") { noteAbc = "=" + base; accState[base] = ""; }
+          else accState[base] = acc;
+          abc += noteAbc + durationToAbc(note.duration);
+        }
+
+        const nextNote = measure[j + 1];
+        const isEighth = note.duration === 0.5;
+        const nextIsEighth = nextNote && nextNote.duration === 0.5;
+        const curBeat = Math.floor(beatPos);
+        const nextBeatPos = beatPos + note.duration;
+        const sameBeat = curBeat === Math.floor(nextBeatPos) || (nextBeatPos % 1 === 0 && false);
+        if (!(isEighth && nextIsEighth && sameBeat)) abc += " ";
+        beatPos = nextBeatPos;
+      }
+
+      abc += (i === measures.length - 1) ? "|]" : "| ";
+    }
+    return abc;
+  }
+
+  // Build a flat list of expected MIDI note numbers (skipping rests) with timing info
+  function buildExpectedNotes(measures, bpm, meter) {
+    const beatsPerMeasure = meter === "3/4" ? 3 : 4;
+    const secPerBeat = 60 / bpm;
+    const notes = [];
+    let time = 0;
+
+    for (const measure of measures) {
+      for (const note of measure) {
+        if (!note.isRest && note.pitch != null) {
+          notes.push({
+            midi: note.pitch,
+            name: midiToNoteName(note.pitch),
+            startTime: time,
+            duration: note.duration * secPerBeat,
+            quarterBeats: note.duration,
+          });
+        }
+        time += note.duration * secPerBeat;
+      }
+    }
+    return notes;
+  }
+
+  // Global index counter so ABCjs note classes line up with our expectedNotes
+  function buildNoteIndexMap(measures) {
+    // Returns a flat array index for each non-rest note, and -1 for rests
+    const map = [];
+    let idx = 0;
+    for (const measure of measures) {
+      for (const note of measure) {
+        if (!note.isRest && note.pitch != null) {
+          map.push(idx++);
+        } else {
+          map.push(-1);
+        }
+      }
+    }
+    return map;
+  }
+
+  let lastRenderedTune = null;
+
+  function render(abcString) {
+    const el = document.getElementById("notation");
+    el.innerHTML = "";
+    const tuneArr = ABCJS.renderAbc(el, abcString, {
+      responsive: "resize",
+      staffwidth: 900,
+      wrap: { minSpacing: 1.5, maxSpacing: 2.8, preferredMeasuresPerLine: 4 },
+      paddingtop: 10, paddingbottom: 20, paddingleft: 20, paddingright: 20,
+      scale: 1.3,
+      add_classes: true,
+    });
+    lastRenderedTune = tuneArr && tuneArr[0];
+  }
+
+  // ==========================================================
+  // 7. YIN PITCH DETECTION ALGORITHM
+  // ==========================================================
+
+  function detectPitchYIN(buffer, sampleRate) {
+    const bufSize = buffer.length;
+    const halfSize = Math.floor(bufSize / 2);
+    const yinBuf = new Float32Array(halfSize);
+
+    // Step 1: Difference function
+    for (let tau = 0; tau < halfSize; tau++) {
+      yinBuf[tau] = 0;
+      for (let i = 0; i < halfSize; i++) {
+        const delta = buffer[i] - buffer[i + tau];
+        yinBuf[tau] += delta * delta;
+      }
+    }
+
+    // Step 2: Cumulative mean normalized difference
+    yinBuf[0] = 1;
+    let runningSum = 0;
+    for (let tau = 1; tau < halfSize; tau++) {
+      runningSum += yinBuf[tau];
+      yinBuf[tau] *= tau / runningSum;
+    }
+
+    // Step 3: Absolute threshold
+    const threshold = 0.15;
+    let tau;
+    for (tau = 2; tau < halfSize; tau++) {
+      if (yinBuf[tau] < threshold) {
+        while (tau + 1 < halfSize && yinBuf[tau + 1] < yinBuf[tau]) tau++;
+        break;
+      }
+    }
+    if (tau === halfSize) return -1;
+
+    // Step 4: Parabolic interpolation
+    let betterTau;
+    const x0 = tau < 1 ? tau : tau - 1;
+    const x2 = tau + 1 < halfSize ? tau + 1 : tau;
+    if (x0 === tau) {
+      betterTau = yinBuf[tau] <= yinBuf[x2] ? tau : x2;
+    } else if (x2 === tau) {
+      betterTau = yinBuf[tau] <= yinBuf[x0] ? tau : x0;
+    } else {
+      const s0 = yinBuf[x0], s1 = yinBuf[tau], s2 = yinBuf[x2];
+      betterTau = tau + (s2 - s0) / (2 * (2 * s1 - s2 - s0));
+    }
+
+    return sampleRate / betterTau;
+  }
+
+  // ==========================================================
+  // 8. AUDIO RECORDING & PITCH SAMPLING
+  // ==========================================================
+
+  let audioCtx = null;
+  let analyserNode = null;
+  let micStream = null;
+  let pitchSamples = [];    // { time, hz, midi, rms }
+  let recordingStartTime = 0;
+  let samplingRAF = null;
+  let isRecording = false;
+
+  async function initAudio() {
+    if (audioCtx) return;
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const source = audioCtx.createMediaStreamSource(micStream);
+    analyserNode = audioCtx.createAnalyser();
+    analyserNode.fftSize = 4096;
+    source.connect(analyserNode);
+  }
+
+  function startPitchSampling() {
+    pitchSamples = [];
+    recordingStartTime = performance.now();
+    isRecording = true;
+    samplePitch();
+  }
+
+  function samplePitch() {
+    if (!isRecording) return;
+
+    const buffer = new Float32Array(analyserNode.fftSize);
+    analyserNode.getFloatTimeDomainData(buffer);
+
+    // RMS for silence detection
+    let sumSq = 0;
+    for (let i = 0; i < buffer.length; i++) sumSq += buffer[i] * buffer[i];
+    const rms = Math.sqrt(sumSq / buffer.length);
+
+    const time = (performance.now() - recordingStartTime) / 1000;
+    const hz = detectPitchYIN(buffer, audioCtx.sampleRate);
+
+    if (hz > 0 && rms > 0.01) {
+      const midi = hzToMidi(hz);
+      // Guitar range filter: ignore wild detections outside E2-C6
+      if (midi >= 40 && midi <= 84) {
+        pitchSamples.push({ time, hz, midi, rms });
+      }
+    } else {
+      pitchSamples.push({ time, hz: 0, midi: 0, rms });
+    }
+
+    samplingRAF = requestAnimationFrame(samplePitch);
+  }
+
+  function stopPitchSampling() {
+    isRecording = false;
+    if (samplingRAF) cancelAnimationFrame(samplingRAF);
+  }
+
+  // ==========================================================
+  // 9. METRONOME
+  // ==========================================================
+
+  function playClick(audioCtx, time, isAccent) {
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    osc.frequency.value = isAccent ? 1000 : 800;
+    gain.gain.setValueAtTime(isAccent ? 0.3 : 0.15, time);
+    gain.gain.exponentialRampToValueAtTime(0.001, time + 0.05);
+    osc.start(time);
+    osc.stop(time + 0.05);
+  }
+
+  function scheduleMetronome(audioCtx, bpm, meter, numMeasures, countInBars) {
+    const secPerBeat = 60 / bpm;
+    const beatsPerMeasure = meter === "3/4" ? 3 : 4;
+    const totalBars = countInBars + numMeasures;
+    const totalBeats = totalBars * beatsPerMeasure;
+    const startTime = audioCtx.currentTime + 0.1;
+    const countInDuration = countInBars * beatsPerMeasure * secPerBeat;
+
+    for (let beat = 0; beat < totalBeats; beat++) {
+      const time = startTime + beat * secPerBeat;
+      const isAccent = (beat % beatsPerMeasure) === 0;
+      playClick(audioCtx, time, isAccent);
+    }
+
+    return {
+      countInEndTime: startTime + countInDuration,
+      recordingEndTime: startTime + totalBeats * secPerBeat,
+      startTime,
+    };
+  }
+
+  // ==========================================================
+  // 10. NOTE SEGMENTATION
+  // ==========================================================
+
+  /**
+   * Convert raw pitch samples into a sequence of discrete notes.
+   * Groups consecutive samples with similar MIDI values, filters short noise.
+   */
+  function segmentNotes(samples) {
+    if (samples.length === 0) return [];
+
+    const notes = [];
+    let currentMidi = -1;
+    let startTime = 0;
+    let midiAccum = [];
+
+    function flushNote() {
+      if (midiAccum.length === 0) return;
+      const avgMidi = midiAccum.reduce((a, b) => a + b, 0) / midiAccum.length;
+      const roundedMidi = Math.round(avgMidi);
+      const duration = midiAccum.length > 0 ? (samples[samples.indexOf(midiAccum._lastSample)]) : 0;
+      notes.push({
+        midi: roundedMidi,
+        name: midiToNoteName(roundedMidi),
+        startTime: startTime,
+        endTime: midiAccum._endTime || startTime,
+        samples: midiAccum.length,
+      });
+      midiAccum = [];
+    }
+
+    for (const sample of samples) {
+      const roundedSample = Math.round(sample.midi);
+
+      if (sample.midi === 0) {
+        // Silence — flush current note
+        if (midiAccum.length >= 3) {
+          midiAccum._endTime = sample.time;
+          flushNote();
+        } else {
+          midiAccum = [];
+        }
+        currentMidi = -1;
+        continue;
+      }
+
+      if (currentMidi === -1 || Math.abs(roundedSample - currentMidi) > 1) {
+        // New note detected
+        if (midiAccum.length >= 3) {
+          midiAccum._endTime = sample.time;
+          flushNote();
+        } else {
+          midiAccum = [];
+        }
+        currentMidi = roundedSample;
+        startTime = sample.time;
+        midiAccum = [sample.midi];
+        midiAccum._endTime = sample.time;
+      } else {
+        midiAccum.push(sample.midi);
+        midiAccum._endTime = sample.time;
+      }
+    }
+
+    // Flush last note
+    if (midiAccum.length >= 3) {
+      flushNote();
+    }
+
+    return notes;
+  }
+
+  // ==========================================================
+  // 11. SCORING ENGINE
+  // ==========================================================
+
+  /**
+   * Compare detected notes against expected melody.
+   * Uses a greedy forward-matching approach with timing tolerance.
+   * Returns per-note results and an overall score.
+   */
+  function scoreMelody(expected, detected) {
+    const results = expected.map(e => ({
+      expected: e,
+      matched: false,
+      detectedNote: null,
+      pitchCorrect: false,
+    }));
+
+    let detIdx = 0;
+
+    for (let i = 0; i < expected.length; i++) {
+      const exp = expected[i];
+
+      // Look for the best matching detected note within a timing window
+      let bestMatch = null;
+      let bestDist = Infinity;
+
+      for (let d = detIdx; d < detected.length && d < detIdx + 4; d++) {
+        const det = detected[d];
+        const timeDist = Math.abs(det.startTime - exp.startTime);
+
+        // Generous timing tolerance: within 1 second of expected start
+        if (timeDist < 1.5) {
+          const pitchDist = Math.abs(det.midi - exp.midi);
+          const totalDist = timeDist + pitchDist * 0.1;
+          if (totalDist < bestDist) {
+            bestDist = totalDist;
+            bestMatch = { detIdx: d, det };
+          }
+        }
+      }
+
+      if (bestMatch) {
+        results[i].matched = true;
+        results[i].detectedNote = bestMatch.det;
+        // Compare by pitch class (mod 12) so octave differences don't matter.
+        // Allow ±0.5 semitone tolerance for natural vocal/intonation variance.
+        const expPC = exp.midi % 12;
+        const detPC = bestMatch.det.midi % 12;
+        const pcDiff = Math.min(
+          Math.abs(detPC - expPC),
+          12 - Math.abs(detPC - expPC)  // wrap-around (e.g. B vs C)
+        );
+        results[i].pitchCorrect = pcDiff <= 0.5;
+        detIdx = bestMatch.detIdx + 1;
+      }
+    }
+
+    const totalNotes = expected.length;
+    const correctNotes = results.filter(r => r.pitchCorrect).length;
+    const matchedNotes = results.filter(r => r.matched).length;
+
+    return {
+      results,
+      totalNotes,
+      correctNotes,
+      matchedNotes,
+      score: totalNotes > 0 ? Math.round((correctNotes / totalNotes) * 100) : 0,
+    };
+  }
+
+  // ==========================================================
+  // 12. VISUAL FEEDBACK — COLOR NOTES ON STAFF
+  // ==========================================================
+
+  function colorNoteElements(scoreResults) {
+    const svgContainer = document.getElementById("notation");
+    if (!svgContainer) return;
+
+    // ABCjs with add_classes: true puts class "abcjs-note" on note groups
+    // and sequential "abcjs-n0", "abcjs-n1", etc. on each note element.
+    // We target the note heads for coloring.
+
+    const noteEls = svgContainer.querySelectorAll(".abcjs-note");
+    let noteIdx = 0;
+
+    for (const el of noteEls) {
+      if (noteIdx >= scoreResults.results.length) break;
+      const result = scoreResults.results[noteIdx];
+
+      // Find the notehead path inside this note group
+      const paths = el.querySelectorAll("path");
+
+      let color;
+      if (result.pitchCorrect) {
+        color = "#2eaa2e"; // green
+      } else if (result.matched) {
+        color = "#e8a317"; // orange — played but wrong pitch
+      } else {
+        color = "#d43232"; // red — missed entirely
+      }
+
+      for (const path of paths) {
+        path.setAttribute("fill", color);
+        path.setAttribute("stroke", color);
+      }
+      // Also color any ledger lines, stems
+      const lines = el.querySelectorAll("line");
+      for (const line of lines) {
+        line.setAttribute("stroke", color);
+      }
+
+      noteIdx++;
+    }
+  }
+
+  // ==========================================================
+  // 13. SCORE DISPLAY
+  // ==========================================================
+
+  function showScore(scoreResult) {
+    const el = document.getElementById("scoreDisplay");
+    const pct = scoreResult.score;
+    let grade, gradeClass;
+
+    if (pct >= 90) { grade = "Excellent!"; gradeClass = "grade-a"; }
+    else if (pct >= 75) { grade = "Good"; gradeClass = "grade-b"; }
+    else if (pct >= 60) { grade = "Fair"; gradeClass = "grade-c"; }
+    else { grade = "Keep Practicing"; gradeClass = "grade-d"; }
+
+    el.innerHTML =
+      '<div class="score-card ' + gradeClass + '">' +
+        '<div class="score-pct">' + pct + '%</div>' +
+        '<div class="score-grade">' + grade + '</div>' +
+        '<div class="score-detail">' +
+          scoreResult.correctNotes + ' of ' + scoreResult.totalNotes + ' notes correct' +
+        '</div>' +
+      '</div>';
+    el.style.display = "block";
+  }
+
+  function hideScore() {
+    const el = document.getElementById("scoreDisplay");
+    el.innerHTML = "";
+    el.style.display = "none";
+  }
+
+  // ==========================================================
+  // 14. STATUS / COUNTDOWN DISPLAY
+  // ==========================================================
+
+  function setStatus(msg) {
+    document.getElementById("statusDisplay").textContent = msg;
+  }
+
+  function clearStatus() {
+    document.getElementById("statusDisplay").textContent = "";
+  }
+
+  // ==========================================================
+  // 15. MAIN CONTROLLER
+  // ==========================================================
+
+  let currentMeasures = null;
+  let currentExpectedNotes = null;
+  let currentKeyDef = null;
+  let currentMeter = null;
+  let currentBpm = 80;
+  let currentNumMeasures = 8;
+
+  function generate() {
+    const keyName    = document.getElementById("keySelect").value;
+    currentMeter     = document.getElementById("meterSelect").value;
+    const difficulty = document.getElementById("difficultySelect").value;
+    currentNumMeasures = parseInt(document.getElementById("measuresSelect").value, 10);
+    currentBpm       = parseInt(document.getElementById("bpmSelect").value, 10);
+    currentKeyDef    = KEY_DEFS[keyName];
+
+    currentMeasures = generateMelody(keyName, currentMeter, difficulty, currentNumMeasures);
+    currentExpectedNotes = buildExpectedNotes(currentMeasures, currentBpm, currentMeter);
+
+    const abc = melodyToAbc(currentMeasures, currentKeyDef, currentMeter);
+    render(abc);
+    hideScore();
+    clearStatus();
+
+    document.getElementById("recordBtn").disabled = false;
+  }
+
+  async function startRecording() {
+    try {
+      await initAudio();
+    } catch (e) {
+      setStatus("Microphone access denied. Please allow microphone access and try again.");
+      return;
+    }
+
+    if (audioCtx.state === "suspended") await audioCtx.resume();
+
+    const recordBtn = document.getElementById("recordBtn");
+    const generateBtn = document.getElementById("generateBtn");
+    recordBtn.disabled = true;
+    generateBtn.disabled = true;
+    hideScore();
+
+    // Re-render clean (remove any previous coloring)
+    const abc = melodyToAbc(currentMeasures, currentKeyDef, currentMeter);
+    render(abc);
+
+    const countInBars = 1;
+    const schedule = scheduleMetronome(audioCtx, currentBpm, currentMeter, currentNumMeasures, countInBars);
+
+    const beatsPerMeasure = currentMeter === "3/4" ? 3 : 4;
+    const secPerBeat = 60 / currentBpm;
+    const countInBeats = countInBars * beatsPerMeasure;
+
+    // Countdown display
+    let countdownBeat = countInBeats;
+    setStatus("Get ready... " + countdownBeat);
+
+    const countdownInterval = setInterval(() => {
+      countdownBeat--;
+      if (countdownBeat > 0) {
+        setStatus("Count in: " + countdownBeat);
+      } else {
+        setStatus("🎵 Recording...");
+        clearInterval(countdownInterval);
+      }
+    }, secPerBeat * 1000);
+
+    // Start recording after count-in
+    const countInMs = countInBars * beatsPerMeasure * secPerBeat * 1000;
+    setTimeout(() => {
+      startPitchSampling();
+    }, countInMs);
+
+    // Stop recording after the melody duration
+    const melodyDurationMs = currentNumMeasures * beatsPerMeasure * secPerBeat * 1000;
+    const totalWaitMs = countInMs + melodyDurationMs + 500; // 500ms buffer
+
+    setTimeout(() => {
+      stopPitchSampling();
+      setStatus("Analyzing...");
+
+      const detected = segmentNotes(pitchSamples);
+      const scoreResult = scoreMelody(currentExpectedNotes, detected);
+
+      colorNoteElements(scoreResult);
+      showScore(scoreResult);
+      setStatus("");
+
+      recordBtn.disabled = false;
+      generateBtn.disabled = false;
+    }, totalWaitMs);
+  }
+
+  // Wire up
+  document.getElementById("generateBtn").addEventListener("click", generate);
+  document.getElementById("recordBtn").addEventListener("click", startRecording);
+  document.getElementById("bpmSelect").addEventListener("change", function () {
+    currentBpm = parseInt(this.value, 10);
+    if (currentMeasures && currentMeter) {
+      currentExpectedNotes = buildExpectedNotes(currentMeasures, currentBpm, currentMeter);
+    }
+  });
+
+  // Generate on load
+  generate();
+})();
