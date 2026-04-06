@@ -1035,6 +1035,7 @@
   let currentBpm = 80;
   let currentNumMeasures = 8;
 
+  const MAX_ATTEMPTS = 4;
   let attempts = [];        // Array of { scoreResult, index }
   let activeAttemptIdx = -1; // Which attempt is currently displayed
 
@@ -1187,10 +1188,16 @@
       setStatus("");
 
       recordBtn.textContent = "Record & Score";
-      recordBtn.disabled = false;
       generateBtn.disabled = false;
       playBtn.disabled = false;
       document.getElementById("shareBtn").disabled = false;
+
+      if (attempts.length >= MAX_ATTEMPTS) {
+        recordBtn.disabled = true;
+        setStatus("Max attempts reached. Generate a new melody to continue.");
+      } else {
+        recordBtn.disabled = false;
+      }
   }
 
   // ==========================================================
@@ -1378,7 +1385,7 @@
     // Re-enable buttons if we have a melody
     if (currentMeasures) {
       document.getElementById("generateBtn").disabled = false;
-      document.getElementById("recordBtn").disabled = false;
+      document.getElementById("recordBtn").disabled = attempts.length >= MAX_ATTEMPTS;
     }
   }
 
