@@ -691,7 +691,7 @@
           Math.abs(detPC - expPC),
           12 - Math.abs(detPC - expPC)  // wrap-around (e.g. B vs C)
         );
-        results[i].pitchCorrect = pcDiff <= 0.6; // allow ±0.6 semitone tolerance
+        results[i].pitchCorrect = pcDiff <= 0.7; // allow ±0.7 semitone tolerance
         detIdx = bestMatch.detIdx + 1;
       }
     }
@@ -915,17 +915,19 @@
       const pillW = 280;
       const pillH = 60;
       const pillX = (canvasW - pillW) / 2;
-      const bgColor = scoreCard.classList.contains("grade-a") ? "#27ae60"
+      const bgColor = scoreCard.classList.contains("grade-s") ? "#FFD000"
+                    : scoreCard.classList.contains("grade-a") ? "#27ae60"
                     : scoreCard.classList.contains("grade-b") ? "#2980b9"
                     : scoreCard.classList.contains("grade-c") ? "#e8a317"
                     : "#c0392b";
+      const textColor = scoreCard.classList.contains("grade-s") ? "#333" : "#fff";
 
       ctx.fillStyle = bgColor;
       ctx.beginPath();
       ctx.roundRect(pillX, scoreY, pillW, pillH, 10);
       ctx.fill();
 
-      ctx.fillStyle = "#fff";
+      ctx.fillStyle = textColor;
       ctx.font = "bold 26px 'Segoe UI', Arial, sans-serif";
       ctx.textAlign = "center";
       ctx.fillText(
