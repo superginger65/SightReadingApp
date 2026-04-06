@@ -524,7 +524,7 @@
     osc.stop(time + 0.05);
   }
 
-  function scheduleMetronome(audioCtx, bpm, meter, numMeasures, countInBars) {
+  function scheduleMetronome(audioCtx, bpm, meter, numMeasures, countInBars, dest) {
     const secPerBeat = 60 / bpm;
     const beatsPerMeasure = meter === "3/4" ? 3 : 4;
     const totalBars = countInBars + numMeasures;
@@ -535,7 +535,7 @@
     for (let beat = 0; beat < totalBeats; beat++) {
       const time = startTime + beat * secPerBeat;
       const isAccent = (beat % beatsPerMeasure) === 0;
-      playClick(audioCtx, time, isAccent);
+      playClick(audioCtx, time, isAccent, dest);
     }
 
     return {
@@ -626,7 +626,7 @@
    * Uses a greedy forward-matching approach with timing tolerance.
    * Returns per-note results and an overall score.
    */
-  function scoreMelody(expected, detected) {
+  function scoreMelody(expected, detected, recordingDuration) {
     const results = expected.map(e => ({
       expected: e,
       matched: false,
@@ -638,6 +638,11 @@
 
     for (let i = 0; i < expected.length; i++) {
       const exp = expected[i];
+
+      // Skip notes/rests that start after the recording ended
+      if (recordingDuration != null && exp.startTime >= recordingDuration) {
+        continue;
+      }
 
       // --- REST SCORING ---
       if (exp.isRest) {
@@ -696,7 +701,7 @@
       }
     }
 
-    const totalNotes = expected.length;
+    const totalNotes = results.filter(r => r.matched || r.pitchCorrect).length || expected.length;
     const correctNotes = results.filter(r => r.pitchCorrect).length;
     const matchedNotes = results.filter(r => r.matched).length;
 
@@ -815,7 +820,8 @@
     const pct = scoreResult.score;
     let grade, gradeClass;
 
-    if (pct === 100) { grade = "Perfect!"; gradeClass = "grade-s"; }
+    if (scoreResult.stoppedEarly) { grade = "Didn't Finish"; gradeClass = "grade-dnf"; }
+    else if (pct === 100) { grade = "Perfect!"; gradeClass = "grade-s"; }
     else if (pct >= 90) { grade = "Excellent!"; gradeClass = "grade-a"; }
     else if (pct >= 75) { grade = "Good"; gradeClass = "grade-b"; }
     else if (pct >= 60) { grade = "Fair"; gradeClass = "grade-c"; }
@@ -925,12 +931,13 @@
       const pillW = 280;
       const pillH = 60;
       const pillX = (canvasW - pillW) / 2;
-      const bgColor = scoreCard.classList.contains("grade-s") ? "#FFD000"
+      const bgColor = scoreCard.classList.contains("grade-dnf") ? "#777"
+                    : scoreCard.classList.contains("grade-s") ? "#FFD000"
                     : scoreCard.classList.contains("grade-a") ? "#27ae60"
                     : scoreCard.classList.contains("grade-b") ? "#2980b9"
                     : scoreCard.classList.contains("grade-c") ? "#e8a317"
                     : "#c0392b";
-      const textColor = scoreCard.classList.contains("grade-s") ? "#333" : "#fff";
+      const textColor = (scoreCard.classList.contains("grade-s") || scoreCard.classList.contains("grade-dnf")) ? "#333" : "#fff";
 
       ctx.fillStyle = bgColor;
       ctx.beginPath();
@@ -1053,7 +1060,18 @@
     document.getElementById("playBtn").disabled = false;
   }
 
+  let recordingTimeouts = [];   // setTimeout IDs for recording flow
+  let recordingInterval = null;  // countdown interval
+  let recordingActive = false;   // true from click to scoring complete
+  let recordMetronomeGain = null; // gain node for recording metronome (to silence on stop)
+
   async function startRecording() {
+    // If already recording, stop early
+    if (recordingActive) {
+      finishRecording(true);
+      return;
+    }
+
     try {
       await initAudio();
     } catch (e) {
@@ -1063,10 +1081,11 @@
 
     if (audioCtx.state === "suspended") await audioCtx.resume();
 
+    recordingActive = true;
     const recordBtn = document.getElementById("recordBtn");
     const generateBtn = document.getElementById("generateBtn");
     const playBtn = document.getElementById("playBtn");
-    recordBtn.disabled = true;
+    recordBtn.textContent = "\u25A0 Stop";
     generateBtn.disabled = true;
     playBtn.disabled = true;
     stopPlayback();
@@ -1077,7 +1096,10 @@
     render(abc);
 
     const countInBars = 1;
-    const schedule = scheduleMetronome(audioCtx, currentBpm, currentMeter, currentNumMeasures, countInBars);
+    // Route metronome through a gain node so we can silence it on early stop
+    recordMetronomeGain = audioCtx.createGain();
+    recordMetronomeGain.connect(audioCtx.destination);
+    const schedule = scheduleMetronome(audioCtx, currentBpm, currentMeter, currentNumMeasures, countInBars, recordMetronomeGain);
 
     const beatsPerMeasure = currentMeter === "3/4" ? 3 : 4;
     const secPerBeat = 60 / currentBpm;
@@ -1087,32 +1109,67 @@
     let countdownBeat = countInBeats;
     setStatus("Get ready... " + countdownBeat);
 
-    const countdownInterval = setInterval(() => {
+    recordingInterval = setInterval(() => {
       countdownBeat--;
       if (countdownBeat > 0) {
         setStatus("Count in: " + countdownBeat);
       } else {
         setStatus("🎵 Recording...");
-        clearInterval(countdownInterval);
+        clearInterval(recordingInterval);
+        recordingInterval = null;
       }
     }, secPerBeat * 1000);
 
     // Start recording after count-in
     const countInMs = countInBars * beatsPerMeasure * secPerBeat * 1000;
-    setTimeout(() => {
+    recordingTimeouts.push(setTimeout(() => {
       startPitchSampling();
-    }, countInMs);
+    }, countInMs));
 
     // Stop recording after the melody duration
     const melodyDurationMs = currentNumMeasures * beatsPerMeasure * secPerBeat * 1000;
     const totalWaitMs = countInMs + melodyDurationMs + 500; // 500ms buffer
 
-    setTimeout(() => {
-      stopPitchSampling();
-      setStatus("Analyzing...");
+    recordingTimeouts.push(setTimeout(() => {
+      finishRecording(false);
+    }, totalWaitMs));
+  }
 
-      const detected = segmentNotes(pitchSamples);
-      const scoreResult = scoreMelody(currentExpectedNotes, detected);
+  function finishRecording(stoppedEarly) {
+    if (!recordingActive) return;
+    recordingActive = false;
+
+    // Cancel any pending timeouts/intervals
+    for (const tid of recordingTimeouts) clearTimeout(tid);
+    recordingTimeouts = [];
+    if (recordingInterval) {
+      clearInterval(recordingInterval);
+      recordingInterval = null;
+    }
+
+    stopPitchSampling();
+
+    // Silence the recording metronome immediately
+    if (recordMetronomeGain) {
+      recordMetronomeGain.gain.cancelScheduledValues(0);
+      recordMetronomeGain.gain.setValueAtTime(0, 0);
+      recordMetronomeGain.disconnect();
+      recordMetronomeGain = null;
+    }
+
+    setStatus("Analyzing...");
+
+    const recordBtn = document.getElementById("recordBtn");
+    const generateBtn = document.getElementById("generateBtn");
+    const playBtn = document.getElementById("playBtn");
+
+    const detected = segmentNotes(pitchSamples);
+    // Compute actual recording duration from samples
+    const recordingDuration = pitchSamples.length > 0
+      ? pitchSamples[pitchSamples.length - 1].time
+      : 0;
+    const scoreResult = scoreMelody(currentExpectedNotes, detected, recordingDuration);
+    scoreResult.stoppedEarly = !!stoppedEarly;
 
       // Store this attempt with its settings
       const attemptSettings = {
@@ -1129,11 +1186,11 @@
       renderAttemptButtons();
       setStatus("");
 
+      recordBtn.textContent = "Record & Score";
       recordBtn.disabled = false;
       generateBtn.disabled = false;
       playBtn.disabled = false;
       document.getElementById("shareBtn").disabled = false;
-    }, totalWaitMs);
   }
 
   // ==========================================================

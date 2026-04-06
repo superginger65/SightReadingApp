@@ -184,6 +184,7 @@ button:disabled {
 }
 
 .grade-s { background: #ffd000; color: #333; }
+.grade-dnf { background: #777; color: #fff; }
 .grade-a { background: #27ae60; }
 .grade-b { background: #2980b9; }
 .grade-c { background: #e8a317; }
