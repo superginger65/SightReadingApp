@@ -1239,13 +1239,15 @@
     highlightedEl = null;
   }
 
-  function startPlayback() {
+  async function startPlayback() {
     if (!currentExpectedNotes || currentExpectedNotes.length === 0) return;
 
     if (!playbackCtx) {
       playbackCtx = new (window.AudioContext || window.webkitAudioContext)();
     }
-    if (playbackCtx.state === "suspended") playbackCtx.resume();
+    if (playbackCtx.state === "suspended") {
+      await playbackCtx.resume();
+    }
 
     isPlaying = true;
     const playBtn = document.getElementById("playBtn");
