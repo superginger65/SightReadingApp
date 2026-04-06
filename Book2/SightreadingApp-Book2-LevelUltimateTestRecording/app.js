@@ -691,7 +691,7 @@
           Math.abs(detPC - expPC),
           12 - Math.abs(detPC - expPC)  // wrap-around (e.g. B vs C)
         );
-        results[i].pitchCorrect = pcDiff <= 0.5;
+        results[i].pitchCorrect = pcDiff <= 0.6; // allow ±0.6 semitone tolerance
         detIdx = bestMatch.detIdx + 1;
       }
     }
@@ -716,6 +716,10 @@
   function colorNoteElements(scoreResults) {
     const svgContainer = document.getElementById("notation");
     if (!svgContainer) return;
+    const svg = svgContainer.querySelector("svg");
+
+    // Remove any previously added arrows
+    svgContainer.querySelectorAll(".pitch-arrow").forEach(a => a.remove());
 
     // Select both pitched notes and rests in document order so indices
     // line up with the scoreResults array (which now includes rests).
@@ -748,8 +752,58 @@
         line.setAttribute("stroke", color);
       }
 
+      // Add sharp/flat arrow for wrong-pitch notes
+      if (!result.expected.isRest && result.matched && !result.pitchCorrect && result.detectedNote && svg) {
+        const direction = pitchDirection(result.expected.midi, result.detectedNote.midi);
+        if (direction !== 0) {
+          addPitchArrow(svg, el, color, direction);
+        }
+      }
+
       idx++;
     }
+  }
+
+  /** Return +1 if detected is sharp, -1 if flat, 0 if same pitch class */
+  function pitchDirection(expectedMidi, detectedMidi) {
+    const expPC = expectedMidi % 12;
+    const detPC = detectedMidi % 12;
+    // Signed pitch-class distance in range (-6, +6]
+    let diff = detPC - expPC;
+    if (diff > 6) diff -= 12;
+    if (diff <= -6) diff += 12;
+    if (Math.abs(diff) <= 0.5) return 0;
+    return diff > 0 ? 1 : -1;
+  }
+
+  /** Append an SVG arrow (▲ or ▼) above or below a note element */
+  function addPitchArrow(svg, noteEl, color, direction) {
+    const bbox = noteEl.getBBox();
+    const cx = bbox.x + bbox.width / 2;
+
+    const arrowSize = 6;
+    const gap = 4;
+
+    let points;
+    if (direction > 0) {
+      // Sharp — upward arrow above the note
+      const tipY = bbox.y - gap;
+      points = (cx) + "," + (tipY) + " " +
+               (cx - arrowSize) + "," + (tipY + arrowSize) + " " +
+               (cx + arrowSize) + "," + (tipY + arrowSize);
+    } else {
+      // Flat — downward arrow below the note
+      const tipY = bbox.y + bbox.height + gap;
+      points = (cx) + "," + (tipY + arrowSize) + " " +
+               (cx - arrowSize) + "," + (tipY) + " " +
+               (cx + arrowSize) + "," + (tipY);
+    }
+
+    const polygon = document.createElementNS("http://www.w3.org/2000/svg", "polygon");
+    polygon.setAttribute("points", points);
+    polygon.setAttribute("fill", color);
+    polygon.setAttribute("class", "pitch-arrow");
+    svg.appendChild(polygon);
   }
 
   // ==========================================================
@@ -761,7 +815,8 @@
     const pct = scoreResult.score;
     let grade, gradeClass;
 
-    if (pct >= 90) { grade = "Excellent!"; gradeClass = "grade-a"; }
+    if (pct === 100) { grade = "Perfect!"; gradeClass = "grade-s"; }
+    else if (pct >= 90) { grade = "Excellent!"; gradeClass = "grade-a"; }
     else if (pct >= 75) { grade = "Good"; gradeClass = "grade-b"; }
     else if (pct >= 60) { grade = "Fair"; gradeClass = "grade-c"; }
     else { grade = "Keep Practicing"; gradeClass = "grade-d"; }
