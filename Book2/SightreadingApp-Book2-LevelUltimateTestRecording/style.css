@@ -160,6 +160,56 @@ button:disabled {
 .grade-c { background: #e8a317; }
 .grade-d { background: #c0392b; }
 
+/* ---------- Attempts bar ---------- */
+.attempts-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 12px;
+  padding: 8px 12px;
+  background: #f0f0f0;
+  border-radius: 8px;
+}
+
+.attempts-label {
+  font-weight: 600;
+  font-size: 14px;
+  white-space: nowrap;
+}
+
+.attempt-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.attempt-btn {
+  padding: 6px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  border: 2px solid #3a6ea5;
+  border-radius: 5px;
+  background: #fff;
+  color: #3a6ea5;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.attempt-btn:hover {
+  background: #e8f0fa;
+}
+
+.attempt-btn.active {
+  background: #3a6ea5;
+  color: #fff;
+}
+
+.attempt-btn .attempt-score {
+  font-size: 11px;
+  opacity: 0.8;
+  margin-left: 4px;
+}
+
 /* ---------- Responsive ---------- */
 @media (max-width: 600px) {
   .container {

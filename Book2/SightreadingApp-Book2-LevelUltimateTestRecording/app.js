@@ -337,7 +337,16 @@
 
     for (const measure of measures) {
       for (const note of measure) {
-        if (!note.isRest && note.pitch != null) {
+        if (note.isRest) {
+          notes.push({
+            isRest: true,
+            midi: null,
+            name: "rest",
+            startTime: time,
+            duration: note.duration * secPerBeat,
+            quarterBeats: note.duration,
+          });
+        } else if (note.pitch != null) {
           notes.push({
             midi: note.pitch,
             name: midiToNoteName(note.pitch),
@@ -630,7 +639,29 @@
     for (let i = 0; i < expected.length; i++) {
       const exp = expected[i];
 
-      // Look for the best matching detected note within a timing window
+      // --- REST SCORING ---
+      if (exp.isRest) {
+        // A rest is correct if no detected note starts within its time window.
+        // Use a small boundary tolerance so notes at the edges aren't penalised.
+        const tolerance = 0.15;
+        const restStart = exp.startTime + tolerance;
+        const restEnd = exp.startTime + exp.duration - tolerance;
+        let soundDuringRest = false;
+
+        for (const det of detected) {
+          if (det.startTime >= restStart && det.startTime < restEnd) {
+            soundDuringRest = true;
+            results[i].detectedNote = det;
+            break;
+          }
+        }
+
+        results[i].matched = true;           // always evaluated
+        results[i].pitchCorrect = !soundDuringRest; // correct = silence
+        continue;
+      }
+
+      // --- PITCHED NOTE SCORING ---
       let bestMatch = null;
       let bestDist = Infinity;
 
@@ -638,7 +669,7 @@
         const det = detected[d];
         const timeDist = Math.abs(det.startTime - exp.startTime);
 
-        // Generous timing tolerance: within 1 second of expected start
+        // Generous timing tolerance: within 1.5 seconds of expected start
         if (timeDist < 1.5) {
           const pitchDist = Math.abs(det.midi - exp.midi);
           const totalDist = timeDist + pitchDist * 0.1;
@@ -686,22 +717,20 @@
     const svgContainer = document.getElementById("notation");
     if (!svgContainer) return;
 
-    // ABCjs with add_classes: true puts class "abcjs-note" on note groups
-    // and sequential "abcjs-n0", "abcjs-n1", etc. on each note element.
-    // We target the note heads for coloring.
+    // Select both pitched notes and rests in document order so indices
+    // line up with the scoreResults array (which now includes rests).
+    const allEls = svgContainer.querySelectorAll(".abcjs-note, .abcjs-rest");
+    let idx = 0;
 
-    const noteEls = svgContainer.querySelectorAll(".abcjs-note");
-    let noteIdx = 0;
-
-    for (const el of noteEls) {
-      if (noteIdx >= scoreResults.results.length) break;
-      const result = scoreResults.results[noteIdx];
-
-      // Find the notehead path inside this note group
-      const paths = el.querySelectorAll("path");
+    for (const el of allEls) {
+      if (idx >= scoreResults.results.length) break;
+      const result = scoreResults.results[idx];
 
       let color;
-      if (result.pitchCorrect) {
+      if (result.expected.isRest) {
+        // Rest: green if player was silent, red if they played
+        color = result.pitchCorrect ? "#2eaa2e" : "#d43232";
+      } else if (result.pitchCorrect) {
         color = "#2eaa2e"; // green
       } else if (result.matched) {
         color = "#e8a317"; // orange — played but wrong pitch
@@ -709,17 +738,17 @@
         color = "#d43232"; // red — missed entirely
       }
 
+      const paths = el.querySelectorAll("path");
       for (const path of paths) {
         path.setAttribute("fill", color);
         path.setAttribute("stroke", color);
       }
-      // Also color any ledger lines, stems
       const lines = el.querySelectorAll("line");
       for (const line of lines) {
         line.setAttribute("stroke", color);
       }
 
-      noteIdx++;
+      idx++;
     }
   }
 
@@ -926,6 +955,9 @@
   let currentBpm = 80;
   let currentNumMeasures = 8;
 
+  let attempts = [];        // Array of { scoreResult, index }
+  let activeAttemptIdx = -1; // Which attempt is currently displayed
+
   function generate() {
     const keyName    = document.getElementById("keySelect").value;
     currentMeter     = document.getElementById("meterSelect").value;
@@ -941,6 +973,7 @@
     render(abc);
     hideScore();
     clearStatus();
+    clearAttempts();
 
     document.getElementById("recordBtn").disabled = false;
   }
@@ -1003,14 +1036,66 @@
       const detected = segmentNotes(pitchSamples);
       const scoreResult = scoreMelody(currentExpectedNotes, detected);
 
+      // Store this attempt
+      attempts.push({ scoreResult });
+      activeAttemptIdx = attempts.length - 1;
+
       colorNoteElements(scoreResult);
       showScore(scoreResult);
+      renderAttemptButtons();
       setStatus("");
 
       recordBtn.disabled = false;
       generateBtn.disabled = false;
       document.getElementById("shareBtn").disabled = false;
     }, totalWaitMs);
+  }
+
+  // ==========================================================
+  // 16. ATTEMPT MANAGEMENT
+  // ==========================================================
+
+  function clearAttempts() {
+    attempts = [];
+    activeAttemptIdx = -1;
+    const bar = document.getElementById("attemptsBar");
+    bar.style.display = "none";
+    document.getElementById("attemptButtons").innerHTML = "";
+  }
+
+  function renderAttemptButtons() {
+    const bar = document.getElementById("attemptsBar");
+    const container = document.getElementById("attemptButtons");
+    container.innerHTML = "";
+
+    if (attempts.length <= 1) {
+      bar.style.display = "none";
+      return;
+    }
+
+    bar.style.display = "flex";
+
+    for (let i = 0; i < attempts.length; i++) {
+      const btn = document.createElement("button");
+      btn.className = "attempt-btn" + (i === activeAttemptIdx ? " active" : "");
+      btn.innerHTML = "#" + (i + 1) +
+        '<span class="attempt-score">' + attempts[i].scoreResult.score + '%</span>';
+      btn.addEventListener("click", () => switchAttempt(i));
+      container.appendChild(btn);
+    }
+  }
+
+  function switchAttempt(idx) {
+    if (idx < 0 || idx >= attempts.length) return;
+    activeAttemptIdx = idx;
+
+    // Re-render clean notation then apply this attempt's coloring
+    const abc = melodyToAbc(currentMeasures, currentKeyDef, currentMeter);
+    render(abc);
+    colorNoteElements(attempts[idx].scoreResult);
+    showScore(attempts[idx].scoreResult);
+    renderAttemptButtons();
+    document.getElementById("shareBtn").disabled = false;
   }
 
   // Wire up
