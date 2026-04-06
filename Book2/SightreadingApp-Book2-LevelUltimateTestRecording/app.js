@@ -512,11 +512,11 @@
   // 9. METRONOME
   // ==========================================================
 
-  function playClick(audioCtx, time, isAccent) {
+  function playClick(audioCtx, time, isAccent, dest) {
     const osc = audioCtx.createOscillator();
     const gain = audioCtx.createGain();
     osc.connect(gain);
-    gain.connect(audioCtx.destination);
+    gain.connect(dest || audioCtx.destination);
     osc.frequency.value = isAccent ? 1000 : 800;
     gain.gain.setValueAtTime(isAccent ? 0.3 : 0.15, time);
     gain.gain.exponentialRampToValueAtTime(0.001, time + 0.05);
@@ -887,12 +887,22 @@
     ctx.fillStyle = "#ffffff";
     ctx.fillRect(0, 0, canvasW, canvasH);
 
-    // Header text
-    const keyLabel = document.getElementById("keySelect").selectedOptions[0].text;
-    const meter = document.getElementById("meterSelect").value;
-    const bpm = document.getElementById("bpmSelect").value;
-    const diff = document.getElementById("difficultySelect").value;
-    const headerText = keyLabel + "  |  " + meter + "  |  " + bpm + " BPM  |  " + diff;
+    // Header text — use saved attempt settings if available
+    let keyLabel, meter, bpm, diff;
+    if (activeAttemptIdx >= 0 && attempts[activeAttemptIdx] && attempts[activeAttemptIdx].settings) {
+      const s = attempts[activeAttemptIdx].settings;
+      keyLabel = s.keyLabel;
+      meter = s.meter;
+      bpm = s.bpm;
+      diff = s.difficulty;
+    } else {
+      keyLabel = document.getElementById("keySelect").selectedOptions[0].text;
+      meter = document.getElementById("meterSelect").value;
+      bpm = document.getElementById("bpmSelect").value;
+      diff = document.getElementById("difficultySelect").value;
+    }
+    const diffLabel = diff.charAt(0).toUpperCase() + diff.slice(1);
+    const headerText = keyLabel + "  |  " + meter + "  |  " + bpm + " BPM  |  " + diffLabel;
     ctx.fillStyle = "#333";
     ctx.font = "bold 16px 'Segoe UI', Arial, sans-serif";
     ctx.textAlign = "center";
@@ -952,8 +962,14 @@
 
     const file = new File([blob], "sightreading-score.png", { type: "image/png" });
 
-    const keyLabel = document.getElementById("keySelect").selectedOptions[0].text;
-    const meter = document.getElementById("meterSelect").value;
+    let keyLabel, meter;
+    if (activeAttemptIdx >= 0 && attempts[activeAttemptIdx] && attempts[activeAttemptIdx].settings) {
+      keyLabel = attempts[activeAttemptIdx].settings.keyLabel;
+      meter = attempts[activeAttemptIdx].settings.meter;
+    } else {
+      keyLabel = document.getElementById("keySelect").selectedOptions[0].text;
+      meter = document.getElementById("meterSelect").value;
+    }
     const shareTitle = "Sight Reading Score — " + keyLabel + " " + meter;
 
     if (navigator.canShare && navigator.canShare({ files: [file] })) {
@@ -1031,8 +1047,10 @@
     hideScore();
     clearStatus();
     clearAttempts();
+    stopPlayback();
 
     document.getElementById("recordBtn").disabled = false;
+    document.getElementById("playBtn").disabled = false;
   }
 
   async function startRecording() {
@@ -1047,8 +1065,11 @@
 
     const recordBtn = document.getElementById("recordBtn");
     const generateBtn = document.getElementById("generateBtn");
+    const playBtn = document.getElementById("playBtn");
     recordBtn.disabled = true;
     generateBtn.disabled = true;
+    playBtn.disabled = true;
+    stopPlayback();
     hideScore();
 
     // Re-render clean (remove any previous coloring)
@@ -1093,8 +1114,14 @@
       const detected = segmentNotes(pitchSamples);
       const scoreResult = scoreMelody(currentExpectedNotes, detected);
 
-      // Store this attempt
-      attempts.push({ scoreResult });
+      // Store this attempt with its settings
+      const attemptSettings = {
+        keyLabel: document.getElementById("keySelect").selectedOptions[0].text,
+        meter: currentMeter,
+        bpm: currentBpm,
+        difficulty: document.getElementById("difficultySelect").value,
+      };
+      attempts.push({ scoreResult, settings: attemptSettings });
       activeAttemptIdx = attempts.length - 1;
 
       colorNoteElements(scoreResult);
@@ -1104,6 +1131,7 @@
 
       recordBtn.disabled = false;
       generateBtn.disabled = false;
+      playBtn.disabled = false;
       document.getElementById("shareBtn").disabled = false;
     }, totalWaitMs);
   }
@@ -1111,6 +1139,199 @@
   // ==========================================================
   // 16. ATTEMPT MANAGEMENT
   // ==========================================================
+
+  // ==========================================================
+  // 16b. MELODY PLAYBACK
+  // ==========================================================
+
+  let playbackCtx = null;
+  let playbackTimeouts = [];
+  let isPlaying = false;
+  let highlightedEl = null;
+  let metronomeGainNode = null;
+  let metronomeMuted = false;
+  const HIGHLIGHT_COLOR = "#3a6ea5";
+
+  function midiToHz(midi) {
+    return 440 * Math.pow(2, (midi - 69) / 12);
+  }
+
+  /** Play a single note with a plucked-guitar-like envelope */
+  function playNote(ctx, midi, startTime, duration) {
+    const hz = midiToHz(midi);
+
+    const noteEnd = startTime + duration * 0.95;
+
+    // Fundamental
+    const osc = ctx.createOscillator();
+    osc.type = "triangle";
+    osc.frequency.value = hz;
+
+    // Slight harmonic for body
+    const osc2 = ctx.createOscillator();
+    osc2.type = "sine";
+    osc2.frequency.value = hz * 2;
+
+    const gain = ctx.createGain();
+    const gain2 = ctx.createGain();
+
+    // Pluck envelope: quick attack, initial decay, sustain, then fade out
+    const attackEnd = startTime + 0.008;
+    const bodyEnd = startTime + Math.min(0.06, duration * 0.1);
+    const fadeStart = noteEnd - Math.min(0.15, duration * 0.15);
+
+    gain.gain.setValueAtTime(0.001, startTime);
+    gain.gain.linearRampToValueAtTime(0.25, attackEnd);
+    gain.gain.exponentialRampToValueAtTime(0.10, bodyEnd);
+    // Hold sustain level until fade-out
+    gain.gain.setValueAtTime(0.10, fadeStart);
+    gain.gain.exponentialRampToValueAtTime(0.001, noteEnd);
+
+    gain2.gain.setValueAtTime(0.001, startTime);
+    gain2.gain.linearRampToValueAtTime(0.06, startTime + 0.005);
+    gain2.gain.exponentialRampToValueAtTime(0.001, startTime + Math.min(0.5, duration * 0.4));
+
+    osc.connect(gain);
+    osc2.connect(gain2);
+    gain.connect(ctx.destination);
+    gain2.connect(ctx.destination);
+
+    osc.start(startTime);
+    osc.stop(noteEnd + 0.05);
+    osc2.start(startTime);
+    osc2.stop(noteEnd + 0.05);
+  }
+
+  function getAllNoteRestEls() {
+    const svgContainer = document.getElementById("notation");
+    return svgContainer ? svgContainer.querySelectorAll(".abcjs-note, .abcjs-rest") : [];
+  }
+
+  function highlightElement(el) {
+    clearHighlight();
+    if (!el) return;
+    highlightedEl = el;
+    const paths = el.querySelectorAll("path");
+    for (const p of paths) {
+      p.dataset.origFill = p.getAttribute("fill") || "";
+      p.dataset.origStroke = p.getAttribute("stroke") || "";
+      p.setAttribute("fill", HIGHLIGHT_COLOR);
+      p.setAttribute("stroke", HIGHLIGHT_COLOR);
+    }
+    const lines = el.querySelectorAll("line");
+    for (const l of lines) {
+      l.dataset.origStroke = l.getAttribute("stroke") || "";
+      l.setAttribute("stroke", HIGHLIGHT_COLOR);
+    }
+  }
+
+  function clearHighlight() {
+    if (!highlightedEl) return;
+    const paths = highlightedEl.querySelectorAll("path");
+    for (const p of paths) {
+      if (p.dataset.origFill !== undefined) p.setAttribute("fill", p.dataset.origFill);
+      if (p.dataset.origStroke !== undefined) p.setAttribute("stroke", p.dataset.origStroke);
+    }
+    const lines = highlightedEl.querySelectorAll("line");
+    for (const l of lines) {
+      if (l.dataset.origStroke !== undefined) l.setAttribute("stroke", l.dataset.origStroke);
+    }
+    highlightedEl = null;
+  }
+
+  function startPlayback() {
+    if (!currentExpectedNotes || currentExpectedNotes.length === 0) return;
+
+    if (!playbackCtx) {
+      playbackCtx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    if (playbackCtx.state === "suspended") playbackCtx.resume();
+
+    isPlaying = true;
+    const playBtn = document.getElementById("playBtn");
+    playBtn.textContent = "\u25A0 Stop";
+
+    // Disable other buttons during playback
+    document.getElementById("generateBtn").disabled = true;
+    document.getElementById("recordBtn").disabled = true;
+
+    const allEls = getAllNoteRestEls();
+    const baseTime = playbackCtx.currentTime + 0.1;
+    const now = performance.now();
+
+    // Schedule metronome clicks alongside the melody
+    const beatsPerMeasure = currentMeter === "3/4" ? 3 : 4;
+    const secPerBeat = 60 / currentBpm;
+    const totalBeats = currentNumMeasures * beatsPerMeasure;
+
+    metronomeGainNode = playbackCtx.createGain();
+    metronomeGainNode.gain.value = metronomeMuted ? 0 : 1;
+    metronomeGainNode.connect(playbackCtx.destination);
+
+    for (let beat = 0; beat < totalBeats; beat++) {
+      const time = baseTime + beat * secPerBeat;
+      const isAccent = (beat % beatsPerMeasure) === 0;
+      playClick(playbackCtx, time, isAccent, metronomeGainNode);
+    }
+
+    for (let i = 0; i < currentExpectedNotes.length; i++) {
+      const note = currentExpectedNotes[i];
+      const noteStart = baseTime + note.startTime;
+
+      // Schedule audio for pitched notes
+      if (!note.isRest && note.midi != null) {
+        playNote(playbackCtx, note.midi, noteStart, note.duration * 0.9);
+      }
+
+      // Schedule visual highlight
+      if (i < allEls.length) {
+        const highlightDelay = note.startTime * 1000;
+        const tid = setTimeout(() => {
+          if (!isPlaying) return;
+          highlightElement(allEls[i]);
+        }, highlightDelay + 100); // +100ms to match audioCtx offset
+        playbackTimeouts.push(tid);
+      }
+    }
+
+    // Schedule end — clear highlight and restore button
+    const lastNote = currentExpectedNotes[currentExpectedNotes.length - 1];
+    const totalDuration = (lastNote.startTime + lastNote.duration) * 1000 + 200;
+    const endTid = setTimeout(() => {
+      stopPlayback();
+    }, totalDuration);
+    playbackTimeouts.push(endTid);
+  }
+
+  function stopPlayback() {
+    isPlaying = false;
+    for (const tid of playbackTimeouts) clearTimeout(tid);
+    playbackTimeouts = [];
+    clearHighlight();
+
+    // Close the audio context to kill all scheduled oscillators
+    if (playbackCtx) {
+      playbackCtx.close().catch(() => {});
+      playbackCtx = null;
+    }
+
+    const playBtn = document.getElementById("playBtn");
+    playBtn.textContent = "\u25B6 Play";
+
+    // Re-enable buttons if we have a melody
+    if (currentMeasures) {
+      document.getElementById("generateBtn").disabled = false;
+      document.getElementById("recordBtn").disabled = false;
+    }
+  }
+
+  function togglePlayback() {
+    if (isPlaying) {
+      stopPlayback();
+    } else {
+      startPlayback();
+    }
+  }
 
   function clearAttempts() {
     attempts = [];
@@ -1157,8 +1378,17 @@
 
   // Wire up
   document.getElementById("generateBtn").addEventListener("click", generate);
+  document.getElementById("playBtn").addEventListener("click", togglePlayback);
   document.getElementById("recordBtn").addEventListener("click", startRecording);
   document.getElementById("shareBtn").addEventListener("click", shareScore);
+  document.getElementById("metronomeMuteBtn").addEventListener("click", function () {
+    metronomeMuted = !metronomeMuted;
+    this.classList.toggle("muted", metronomeMuted);
+    this.innerHTML = metronomeMuted ? "\uD83D\uDD07 Metronome" : "\uD83D\uDD0A Metronome";
+    if (metronomeGainNode) {
+      metronomeGainNode.gain.value = metronomeMuted ? 0 : 1;
+    }
+  });
   document.getElementById("bpmSelect").addEventListener("change", function () {
     currentBpm = parseInt(this.value, 10);
     if (currentMeasures && currentMeter) {

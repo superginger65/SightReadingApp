@@ -90,6 +90,34 @@ button:disabled {
   background: #922b21;
 }
 
+/* ---------- Play button ---------- */
+.play-btn {
+  background: #27ae60;
+}
+
+.play-btn:hover {
+  background: #219150;
+}
+
+.play-btn:active {
+  background: #1a7a42;
+}
+
+/* ---------- Metronome mute button ---------- */
+.metronome-mute-btn {
+  background: #555;
+  font-size: 14px;
+  padding: 10px 16px;
+}
+
+.metronome-mute-btn:hover {
+  background: #444;
+}
+
+.metronome-mute-btn.muted {
+  background: #c0392b;
+}
+
 /* ---------- Share button ---------- */
 .share-btn {
   background: #8e44ad;
