@@ -1241,7 +1241,11 @@
 
   function startPlayback() {
     if (!currentExpectedNotes || currentExpectedNotes.length === 0) return;
-    if (!playbackCtx) return; // context should already be created by togglePlayback
+
+    if (!playbackCtx) {
+      playbackCtx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    if (playbackCtx.state === "suspended") playbackCtx.resume();
 
     isPlaying = true;
     const playBtn = document.getElementById("playBtn");
@@ -1325,21 +1329,6 @@
     if (isPlaying) {
       stopPlayback();
     } else {
-      // Create / resume AudioContext synchronously inside the user gesture
-      // so mobile browsers (iOS Safari) allow audio playback.
-      if (!playbackCtx) {
-        playbackCtx = new (window.AudioContext || window.webkitAudioContext)();
-      }
-      if (playbackCtx.state === "suspended") {
-        playbackCtx.resume();
-      }
-      // Play a silent buffer to unlock audio on iOS
-      const unlockBuf = playbackCtx.createBuffer(1, 1, playbackCtx.sampleRate);
-      const unlockSrc = playbackCtx.createBufferSource();
-      unlockSrc.buffer = unlockBuf;
-      unlockSrc.connect(playbackCtx.destination);
-      unlockSrc.start(0);
-
       startPlayback();
     }
   }
