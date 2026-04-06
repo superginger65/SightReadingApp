@@ -752,6 +752,155 @@
     const el = document.getElementById("scoreDisplay");
     el.innerHTML = "";
     el.style.display = "none";
+    document.getElementById("shareBtn").disabled = true;
+  }
+
+  // ==========================================================
+  // 13b. SHARE — capture notation + score as image, use Web Share API
+  // ==========================================================
+
+  /**
+   * Render the notation SVG and score card onto a canvas, return as a Blob (PNG).
+   */
+  async function captureResultImage() {
+    const notationEl = document.getElementById("notation");
+    const scoreEl = document.getElementById("scoreDisplay");
+    const svgEl = notationEl.querySelector("svg");
+    if (!svgEl) return null;
+
+    // Serialize the SVG with inline styles
+    const svgClone = svgEl.cloneNode(true);
+    svgClone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+    const svgData = new XMLSerializer().serializeToString(svgClone);
+    const svgBlob = new Blob([svgData], { type: "image/svg+xml;charset=utf-8" });
+    const svgUrl = URL.createObjectURL(svgBlob);
+
+    // Load SVG into an image
+    const svgImg = await new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = reject;
+      img.src = svgUrl;
+    });
+
+    // Dimensions
+    const padding = 30;
+    const scale = 2; // retina quality
+    const svgW = svgImg.naturalWidth || svgEl.clientWidth;
+    const svgH = svgImg.naturalHeight || svgEl.clientHeight;
+    const scoreCardH = 100;
+    const headerH = 50;
+    const canvasW = Math.max(svgW, 500);
+    const canvasH = headerH + svgH + scoreCardH + padding * 3;
+
+    const canvas = document.createElement("canvas");
+    canvas.width = canvasW * scale;
+    canvas.height = canvasH * scale;
+    const ctx = canvas.getContext("2d");
+    ctx.scale(scale, scale);
+
+    // Background
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, canvasW, canvasH);
+
+    // Header text
+    const keyLabel = document.getElementById("keySelect").selectedOptions[0].text;
+    const meter = document.getElementById("meterSelect").value;
+    const bpm = document.getElementById("bpmSelect").value;
+    const diff = document.getElementById("difficultySelect").value;
+    const headerText = keyLabel + "  |  " + meter + "  |  " + bpm + " BPM  |  " + diff;
+    ctx.fillStyle = "#333";
+    ctx.font = "bold 16px 'Segoe UI', Arial, sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText(headerText, canvasW / 2, padding + 16);
+
+    // Draw SVG notation
+    ctx.drawImage(svgImg, (canvasW - svgW) / 2, headerH + padding, svgW, svgH);
+    URL.revokeObjectURL(svgUrl);
+
+    // Draw score summary
+    const scoreCard = scoreEl.querySelector(".score-card");
+    if (scoreCard) {
+      const pctText = scoreCard.querySelector(".score-pct");
+      const gradeText = scoreCard.querySelector(".score-grade");
+      const detailText = scoreCard.querySelector(".score-detail");
+
+      const scoreY = headerH + svgH + padding * 2;
+
+      // Score background pill
+      const pillW = 280;
+      const pillH = 60;
+      const pillX = (canvasW - pillW) / 2;
+      const bgColor = scoreCard.classList.contains("grade-a") ? "#27ae60"
+                    : scoreCard.classList.contains("grade-b") ? "#2980b9"
+                    : scoreCard.classList.contains("grade-c") ? "#e8a317"
+                    : "#c0392b";
+
+      ctx.fillStyle = bgColor;
+      ctx.beginPath();
+      ctx.roundRect(pillX, scoreY, pillW, pillH, 10);
+      ctx.fill();
+
+      ctx.fillStyle = "#fff";
+      ctx.font = "bold 26px 'Segoe UI', Arial, sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText(
+        (pctText ? pctText.textContent : "") + "  " + (gradeText ? gradeText.textContent : ""),
+        canvasW / 2, scoreY + 30
+      );
+      ctx.font = "14px 'Segoe UI', Arial, sans-serif";
+      ctx.fillText(
+        detailText ? detailText.textContent : "",
+        canvasW / 2, scoreY + 50
+      );
+    }
+
+    // Convert canvas to blob
+    return new Promise(resolve => canvas.toBlob(resolve, "image/png"));
+  }
+
+  async function shareScore() {
+    setStatus("Preparing image...");
+    const blob = await captureResultImage();
+    if (!blob) { setStatus("Nothing to share."); return; }
+
+    const file = new File([blob], "sightreading-score.png", { type: "image/png" });
+
+    const keyLabel = document.getElementById("keySelect").selectedOptions[0].text;
+    const meter = document.getElementById("meterSelect").value;
+    const shareTitle = "Sight Reading Score — " + keyLabel + " " + meter;
+
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      try {
+        await navigator.share({
+          title: shareTitle,
+          text: shareTitle,
+          files: [file],
+        });
+        setStatus("");
+      } catch (err) {
+        if (err.name !== "AbortError") {
+          // User cancelled — not an error
+          fallbackDownload(blob);
+        }
+        setStatus("");
+      }
+    } else {
+      // Fallback: download the image
+      fallbackDownload(blob);
+      setStatus("");
+    }
+  }
+
+  function fallbackDownload(blob) {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "sightreading-score.png";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
   }
 
   // ==========================================================
@@ -860,12 +1009,14 @@
 
       recordBtn.disabled = false;
       generateBtn.disabled = false;
+      document.getElementById("shareBtn").disabled = false;
     }, totalWaitMs);
   }
 
   // Wire up
   document.getElementById("generateBtn").addEventListener("click", generate);
   document.getElementById("recordBtn").addEventListener("click", startRecording);
+  document.getElementById("shareBtn").addEventListener("click", shareScore);
   document.getElementById("bpmSelect").addEventListener("change", function () {
     currentBpm = parseInt(this.value, 10);
     if (currentMeasures && currentMeter) {
