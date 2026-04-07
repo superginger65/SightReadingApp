@@ -465,7 +465,7 @@
     audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     micStream = await navigator.mediaDevices.getUserMedia({
       audio: {
-        echoCancellation: false,
+        echoCancellation: true,
         noiseSuppression: false,
         autoGainControl: true,
       }
