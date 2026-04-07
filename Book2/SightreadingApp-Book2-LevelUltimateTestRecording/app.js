@@ -454,6 +454,7 @@
   let audioCtx = null;
   let analyserNode = null;
   let micStream = null;
+  let stereoRecordStream = null; // stereo stream for MediaRecorder
   let pitchSamples = [];    // { time, hz, midi, rms }
   let recordingStartTime = 0;
   let samplingRAF = null;
@@ -462,11 +463,26 @@
   async function initAudio() {
     if (audioCtx) return;
     audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    micStream = await navigator.mediaDevices.getUserMedia({
+      audio: {
+        echoCancellation: false,
+        noiseSuppression: false,
+        autoGainControl: true,
+      }
+    });
     const source = audioCtx.createMediaStreamSource(micStream);
     analyserNode = audioCtx.createAnalyser();
     analyserNode.fftSize = 4096;
     source.connect(analyserNode);
+
+    // Create a stereo destination for recording (mono mic → both L+R)
+    const stereoDest = audioCtx.createMediaStreamDestination();
+    stereoDest.channelCount = 2;
+    const merger = audioCtx.createChannelMerger(2);
+    source.connect(merger, 0, 0); // mono → left
+    source.connect(merger, 0, 1); // mono → right
+    merger.connect(stereoDest);
+    stereoRecordStream = stereoDest.stream;
   }
 
   function startPitchSampling() {
@@ -490,7 +506,7 @@
     const time = (performance.now() - recordingStartTime) / 1000;
     const hz = detectPitchYIN(buffer, audioCtx.sampleRate);
 
-    if (hz > 0 && rms > 0.01) {
+    if (hz > 0 && rms > 0.008) {
       const midi = hzToMidi(hz);
       // Guitar range filter: ignore wild detections outside E2-C6
       if (midi >= 40 && midi <= 84) {
@@ -552,6 +568,7 @@
   /**
    * Convert raw pitch samples into a sequence of discrete notes.
    * Groups consecutive samples with similar MIDI values, filters short noise.
+   * Post-processes to merge same-pitch neighbors separated by brief gaps.
    */
   function segmentNotes(samples) {
     if (samples.length === 0) return [];
@@ -565,7 +582,6 @@
       if (midiAccum.length === 0) return;
       const avgMidi = midiAccum.reduce((a, b) => a + b, 0) / midiAccum.length;
       const roundedMidi = Math.round(avgMidi);
-      const duration = midiAccum.length > 0 ? (samples[samples.indexOf(midiAccum._lastSample)]) : 0;
       notes.push({
         midi: roundedMidi,
         name: midiToNoteName(roundedMidi),
@@ -581,7 +597,7 @@
 
       if (sample.midi === 0) {
         // Silence — flush current note
-        if (midiAccum.length >= 3) {
+        if (midiAccum.length >= 2) {
           midiAccum._endTime = sample.time;
           flushNote();
         } else {
@@ -593,7 +609,7 @@
 
       if (currentMidi === -1 || Math.abs(roundedSample - currentMidi) > 1) {
         // New note detected
-        if (midiAccum.length >= 3) {
+        if (midiAccum.length >= 2) {
           midiAccum._endTime = sample.time;
           flushNote();
         } else {
@@ -610,11 +626,28 @@
     }
 
     // Flush last note
-    if (midiAccum.length >= 3) {
+    if (midiAccum.length >= 2) {
       flushNote();
     }
 
-    return notes;
+    // Post-process: merge consecutive notes with the same pitch class
+    // separated by a brief gap (< 0.12s), which happens when detection
+    // briefly drops out mid-note.
+    const merged = [];
+    for (const note of notes) {
+      const prev = merged[merged.length - 1];
+      if (prev &&
+          prev.midi % 12 === note.midi % 12 &&
+          (note.startTime - prev.endTime) < 0.12) {
+        // Merge into previous: extend endTime, accumulate samples
+        prev.endTime = note.endTime;
+        prev.samples += note.samples;
+      } else {
+        merged.push({ ...note });
+      }
+    }
+
+    return merged;
   }
 
   // ==========================================================
@@ -623,8 +656,9 @@
 
   /**
    * Compare detected notes against expected melody.
-   * Uses a greedy forward-matching approach with timing tolerance.
-   * Returns per-note results and an overall score.
+   * Uses time-window matching: for each expected note, find the best
+   * detected note within a time window around the expected start time.
+   * This is robust against detection splits and spurious notes.
    */
   function scoreMelody(expected, detected, recordingDuration) {
     const results = expected.map(e => ({
@@ -632,9 +666,11 @@
       matched: false,
       detectedNote: null,
       pitchCorrect: false,
+      evaluated: false,
     }));
 
-    let detIdx = 0;
+    // Track which detected notes have been claimed to avoid double-counting
+    const usedDetected = new Set();
 
     for (let i = 0; i < expected.length; i++) {
       const exp = expected[i];
@@ -646,8 +682,6 @@
 
       // --- REST SCORING ---
       if (exp.isRest) {
-        // A rest is correct if no detected note starts within its time window.
-        // Use a small boundary tolerance so notes at the edges aren't penalised.
         const tolerance = 0.15;
         const restStart = exp.startTime + tolerance;
         const restEnd = exp.startTime + exp.duration - tolerance;
@@ -661,47 +695,98 @@
           }
         }
 
-        results[i].matched = true;           // always evaluated
-        results[i].pitchCorrect = !soundDuringRest; // correct = silence
+        results[i].matched = true;
+        results[i].pitchCorrect = !soundDuringRest;
+        results[i].evaluated = true;
         continue;
       }
 
       // --- PITCHED NOTE SCORING ---
+      // Search ALL detected notes within ±timeTolerance of the expected start.
+      // Prefer the closest pitch match, breaking ties by timing distance.
+      const secPerBeat = exp.duration / (exp.quarterBeats || 1);
+      const timeTolerance = Math.max(exp.duration * 0.75, secPerBeat * 0.75, 0.75);
       let bestMatch = null;
-      let bestDist = Infinity;
+      let bestScore = Infinity;
 
-      for (let d = detIdx; d < detected.length && d < detIdx + 4; d++) {
+      for (let d = 0; d < detected.length; d++) {
+        if (usedDetected.has(d)) continue;
         const det = detected[d];
+
+        // Skip notes too early
+        if (det.startTime < exp.startTime - timeTolerance) continue;
+        // Stop once past the window
+        if (det.startTime > exp.startTime + timeTolerance) break;
+
         const timeDist = Math.abs(det.startTime - exp.startTime);
 
-        // Generous timing tolerance: within 1.5 seconds of expected start
-        if (timeDist < 1.5) {
-          const pitchDist = Math.abs(det.midi - exp.midi);
-          const totalDist = timeDist + pitchDist * 0.1;
-          if (totalDist < bestDist) {
-            bestDist = totalDist;
-            bestMatch = { detIdx: d, det };
-          }
+        // Score: heavily favour pitch-class matches, then timing
+        const expPC = exp.midi % 12;
+        const detPC = det.midi % 12;
+        const pcDiff = Math.min(
+          Math.abs(detPC - expPC),
+          12 - Math.abs(detPC - expPC)
+        );
+        // Weight: pitch match is most important, then timing
+        const score = pcDiff * 3 + timeDist;
+        if (score < bestScore) {
+          bestScore = score;
+          bestMatch = { detIdx: d, det, pcDiff };
         }
       }
 
       if (bestMatch) {
+        usedDetected.add(bestMatch.detIdx);
         results[i].matched = true;
         results[i].detectedNote = bestMatch.det;
-        // Compare by pitch class (mod 12) so octave differences don't matter.
-        // Allow ±0.5 semitone tolerance for natural vocal/intonation variance.
+        results[i].pitchCorrect = bestMatch.pcDiff === 0;
+      }
+      results[i].evaluated = true;
+    }
+
+    // --- SECOND PASS: retry unmatched notes against unclaimed detections ---
+    // This recovers from "note stealing" where a detected note was claimed
+    // by an adjacent expected note, leaving the real target unmatched.
+    // Use a tighter window to avoid false positives.
+    for (let i = 0; i < results.length; i++) {
+      if (results[i].matched || !results[i].evaluated) continue;
+      const exp = results[i].expected;
+      if (exp.isRest) continue;
+
+      const secPerBeat = exp.duration / (exp.quarterBeats || 1);
+      const timeTolerance = Math.max(secPerBeat * 0.5, 0.5);
+      let bestMatch = null;
+      let bestScore = Infinity;
+
+      for (let d = 0; d < detected.length; d++) {
+        if (usedDetected.has(d)) continue;
+        const det = detected[d];
+        if (det.startTime < exp.startTime - timeTolerance) continue;
+        if (det.startTime > exp.startTime + timeTolerance) break;
+
+        const timeDist = Math.abs(det.startTime - exp.startTime);
         const expPC = exp.midi % 12;
-        const detPC = bestMatch.det.midi % 12;
+        const detPC = det.midi % 12;
         const pcDiff = Math.min(
           Math.abs(detPC - expPC),
-          12 - Math.abs(detPC - expPC)  // wrap-around (e.g. B vs C)
+          12 - Math.abs(detPC - expPC)
         );
-        results[i].pitchCorrect = pcDiff <= 0.7; // allow ±0.7 semitone tolerance
-        detIdx = bestMatch.detIdx + 1;
+        const score = pcDiff * 3 + timeDist;
+        if (score < bestScore) {
+          bestScore = score;
+          bestMatch = { detIdx: d, det, pcDiff };
+        }
+      }
+
+      if (bestMatch) {
+        usedDetected.add(bestMatch.detIdx);
+        results[i].matched = true;
+        results[i].detectedNote = bestMatch.det;
+        results[i].pitchCorrect = bestMatch.pcDiff === 0;
       }
     }
 
-    const totalNotes = results.filter(r => r.matched || r.pitchCorrect).length || expected.length;
+    const totalNotes = results.filter(r => r.evaluated).length || expected.length;
     const correctNotes = results.filter(r => r.pitchCorrect).length;
     const matchedNotes = results.filter(r => r.matched).length;
 
@@ -843,6 +928,7 @@
     el.innerHTML = "";
     el.style.display = "none";
     document.getElementById("shareBtn").disabled = true;
+    document.getElementById("shareRecordingBtn").disabled = true;
   }
 
   // ==========================================================
@@ -1013,6 +1099,66 @@
   }
 
   // ==========================================================
+  // 13c. SHARE RECORDING — download/share audio of performance
+  // ==========================================================
+
+  async function shareRecording() {
+    const attempt = attempts[activeAttemptIdx];
+    if (!attempt || !attempt.settings.audioBlob) {
+      setStatus("No recording available.");
+      return;
+    }
+
+    const audioBlob = attempt.settings.audioBlob;
+    const ext = audioBlob.type.includes("mp4") ? "m4a" : "webm";
+    const mimeType = audioBlob.type || "audio/webm";
+
+    // Also capture the score image to share both
+    setStatus("Preparing recording...");
+    const imgBlob = await captureResultImage();
+
+    const audioFile = new File([audioBlob], "sightreading-recording." + ext, { type: mimeType });
+    const files = [audioFile];
+    if (imgBlob) {
+      files.push(new File([imgBlob], "sightreading-score.png", { type: "image/png" }));
+    }
+
+    let keyLabel = "";
+    let meter = "";
+    if (attempt.settings) {
+      keyLabel = attempt.settings.keyLabel;
+      meter = attempt.settings.meter;
+    }
+    const shareTitle = "Sight Reading Recording — " + keyLabel + " " + meter;
+
+    if (navigator.canShare && navigator.canShare({ files: files })) {
+      try {
+        await navigator.share({ title: shareTitle, text: shareTitle, files: files });
+        setStatus("");
+      } catch (err) {
+        if (err.name !== "AbortError") {
+          fallbackDownloadAudio(audioBlob, ext);
+        }
+        setStatus("");
+      }
+    } else {
+      fallbackDownloadAudio(audioBlob, ext);
+      setStatus("");
+    }
+  }
+
+  function fallbackDownloadAudio(blob, ext) {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "sightreading-recording." + ext;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
+  // ==========================================================
   // 14. STATUS / COUNTDOWN DISPLAY
   // ==========================================================
 
@@ -1065,6 +1211,8 @@
   let recordingInterval = null;  // countdown interval
   let recordingActive = false;   // true from click to scoring complete
   let recordMetronomeGain = null; // gain node for recording metronome (to silence on stop)
+  let mediaRecorder = null;      // MediaRecorder for capturing audio
+  let audioChunks = [];           // chunks from MediaRecorder
 
   async function startRecording() {
     // If already recording, stop early
@@ -1106,14 +1254,14 @@
     const secPerBeat = 60 / currentBpm;
     const countInBeats = countInBars * beatsPerMeasure;
 
-    // Countdown display
-    let countdownBeat = countInBeats;
-    setStatus("Get ready... " + countdownBeat);
+    // Count-in display (counts up: 1, 2, 3, 4...)
+    let countUpBeat = 1;
+    setStatus("Count in: " + countUpBeat);
 
     recordingInterval = setInterval(() => {
-      countdownBeat--;
-      if (countdownBeat > 0) {
-        setStatus("Count in: " + countdownBeat);
+      countUpBeat++;
+      if (countUpBeat <= countInBeats) {
+        setStatus("Count in: " + countUpBeat);
       } else {
         setStatus("🎵 Recording...");
         clearInterval(recordingInterval);
@@ -1125,6 +1273,17 @@
     const countInMs = countInBars * beatsPerMeasure * secPerBeat * 1000;
     recordingTimeouts.push(setTimeout(() => {
       startPitchSampling();
+      // Start MediaRecorder for audio capture
+      audioChunks = [];
+      try {
+        mediaRecorder = new MediaRecorder(stereoRecordStream);
+        mediaRecorder.ondataavailable = function (e) {
+          if (e.data.size > 0) audioChunks.push(e.data);
+        };
+        mediaRecorder.start();
+      } catch (e) {
+        mediaRecorder = null;
+      }
     }, countInMs));
 
     // Stop recording after the melody duration
@@ -1149,6 +1308,21 @@
     }
 
     stopPitchSampling();
+
+    // Stop MediaRecorder and build audio blob
+    let audioBlob = null;
+    const audioReady = new Promise(resolve => {
+      if (mediaRecorder && mediaRecorder.state !== "inactive") {
+        mediaRecorder.onstop = function () {
+          const mimeType = mediaRecorder.mimeType || "audio/webm";
+          audioBlob = new Blob(audioChunks, { type: mimeType });
+          resolve();
+        };
+        mediaRecorder.stop();
+      } else {
+        resolve();
+      }
+    });
 
     // Silence the recording metronome immediately
     if (recordMetronomeGain) {
@@ -1179,6 +1353,11 @@
         bpm: currentBpm,
         difficulty: document.getElementById("difficultySelect").value,
       };
+      // Wait for audio blob to be ready before storing attempt
+      audioReady.then(function () {
+        attemptSettings.audioBlob = audioBlob;
+        document.getElementById("shareRecordingBtn").disabled = false;
+      });
       attempts.push({ scoreResult, settings: attemptSettings });
       activeAttemptIdx = attempts.length - 1;
 
@@ -1438,6 +1617,8 @@
     showScore(attempts[idx].scoreResult);
     renderAttemptButtons();
     document.getElementById("shareBtn").disabled = false;
+    const hasAudio = attempts[idx] && attempts[idx].settings.audioBlob;
+    document.getElementById("shareRecordingBtn").disabled = !hasAudio;
   }
 
   // Wire up
@@ -1445,6 +1626,7 @@
   document.getElementById("playBtn").addEventListener("click", togglePlayback);
   document.getElementById("recordBtn").addEventListener("click", startRecording);
   document.getElementById("shareBtn").addEventListener("click", shareScore);
+  document.getElementById("shareRecordingBtn").addEventListener("click", shareRecording);
   document.getElementById("metronomeMuteBtn").addEventListener("click", function () {
     metronomeMuted = !metronomeMuted;
     this.classList.toggle("muted", metronomeMuted);
