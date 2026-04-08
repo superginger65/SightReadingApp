@@ -31,64 +31,17 @@
   const RANGE_LOW  = 52;  // E3
   const RANGE_HIGH = 77;  // F5
 
-  // ==========================================================
-  // 1b. SEEDED PSEUDO-RANDOM NUMBER GENERATOR
-  // ==========================================================
-
-  let _prngState = 0;
-
-  function hashString(str) {
-    let hash = 0;
-    for (let i = 0; i < str.length; i++) {
-      hash = ((hash << 5) - hash + str.charCodeAt(i)) | 0;
-    }
-    return hash >>> 0;
-  }
-
-  function seedPRNG(seedStr) {
-    _prngState = hashString(seedStr);
-    if (_prngState === 0) _prngState = 1;
-  }
-
-  function seededRandom() {
-    _prngState |= 0;
-    _prngState = (_prngState + 0x6D2B79F5) | 0;
-    let t = Math.imul(_prngState ^ (_prngState >>> 15), 1 | _prngState);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  }
-
-  let lastUsedSeed = "";
-
-  function incrementSeed(seed) {
-    const match = seed.match(/^(.*-)?(\d+)$/);
-    if (match && match[1]) return match[1] + (parseInt(match[2], 10) + 1);
-    return seed + "-2";
-  }
+  // --- DEMO MODE ---
+  // Restrict to only D, G, A, B within one octave
+  const DEMO_PITCHES = [62, 67, 69, 71, 72, 74]; // D4, G4, A4, B4, C5, D5
 
   // ==========================================================
   // 2. SCALE & PITCH UTILITIES
   // ==========================================================
 
   function getScalePitches(keyDef) {
-    const pattern = keyDef.mode === "major" ? MAJOR_SCALE : MINOR_SCALE;
-    const pitches = [];
-    for (let oct = -2; oct <= 2; oct++) {
-      for (const offset of pattern) {
-        const p = keyDef.tonic + oct * 12 + offset;
-        if (p >= RANGE_LOW && p <= RANGE_HIGH) pitches.push(p);
-      }
-    }
-    if (keyDef.mode === "minor") {
-      for (let oct = -2; oct <= 2; oct++) {
-        const raised7 = keyDef.tonic + oct * 12 + 11;
-        if (raised7 >= RANGE_LOW && raised7 <= RANGE_HIGH && !pitches.includes(raised7)) {
-          pitches.push(raised7);
-        }
-      }
-    }
-    pitches.sort((a, b) => a - b);
-    return [...new Set(pitches)];
+    // Demo mode: return only the allowed demo pitches
+    return DEMO_PITCHES.slice();
   }
 
   function scaleDegree(midi, keyDef) {
@@ -188,14 +141,14 @@
     }
 
     if (candidates.length === 0) {
-      return scalePitches[Math.floor(seededRandom() * scalePitches.length)];
+      return scalePitches[Math.floor(Math.random() * scalePitches.length)];
     }
     return weightedPick(candidates);
   }
 
   function weightedPick(candidates) {
     const total = candidates.reduce((s, c) => s + c.weight, 0);
-    let r = seededRandom() * total;
+    let r = Math.random() * total;
     for (const c of candidates) {
       r -= c.weight;
       if (r <= 0) return c.pitch;
@@ -220,7 +173,7 @@
     const target = beatsPerMeasure;
     let attempts = 0;
     while (attempts < 50) {
-      const pattern = rhythmPool[Math.floor(seededRandom() * rhythmPool.length)];
+      const pattern = rhythmPool[Math.floor(Math.random() * rhythmPool.length)];
       const durations = parseRhythm(pattern);
       const total = durations.reduce((a, b) => a + b, 0);
       if (total === target) return durations;
@@ -274,7 +227,7 @@
           notes.push({ pitch: tonicNear, duration: dur, isRest: false });
           currentPitch = tonicNear;
         } else {
-          if (seededRandom() < profile.restChance && beatPos > 0) {
+          if (Math.random() < profile.restChance && beatPos > 0) {
             notes.push({ pitch: null, duration: dur, isRest: true });
           } else {
             const nextPitch = pickNextPitch(currentPitch, prevInterval, scalePitches, keyDef, difficulty, beatStrength);
@@ -1015,21 +968,16 @@
     ctx.fillRect(0, 0, canvasW, canvasH);
 
     // Header text — use saved attempt settings if available
-    let keyLabel, meter, bpm, diff;
+    let meter, bpm;
     if (activeAttemptIdx >= 0 && attempts[activeAttemptIdx] && attempts[activeAttemptIdx].settings) {
       const s = attempts[activeAttemptIdx].settings;
-      keyLabel = s.keyLabel;
       meter = s.meter;
       bpm = s.bpm;
-      diff = s.difficulty;
     } else {
-      keyLabel = document.getElementById("keySelect").selectedOptions[0].text;
       meter = document.getElementById("meterSelect").value;
       bpm = document.getElementById("bpmSelect").value;
-      diff = document.getElementById("difficultySelect").value;
     }
-    const diffLabel = diff.charAt(0).toUpperCase() + diff.slice(1);
-    const headerText = keyLabel + "  |  " + meter + "  |  " + bpm + " BPM  |  " + diffLabel;
+    const headerText = "Demo  |  " + meter + "  |  " + bpm + " BPM";
     ctx.fillStyle = "#333";
     ctx.font = "bold 16px 'Segoe UI', Arial, sans-serif";
     ctx.textAlign = "center";
@@ -1079,6 +1027,18 @@
       );
     }
 
+    // --- DEMO WATERMARK ---
+    ctx.save();
+    ctx.globalAlpha = 0.2;
+    ctx.fillStyle = "#000";
+    ctx.font = "bold 120px 'Segoe UI', Arial, sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.translate(canvasW / 2, canvasH / 2);
+    ctx.rotate(-Math.PI / 6);
+    ctx.fillText("DEMO", 0, 0);
+    ctx.restore();
+
     // Convert canvas to blob
     return new Promise(resolve => canvas.toBlob(resolve, "image/png"));
   }
@@ -1090,15 +1050,13 @@
 
     const file = new File([blob], "sightreading-score.png", { type: "image/png" });
 
-    let keyLabel, meter;
+    let meter;
     if (activeAttemptIdx >= 0 && attempts[activeAttemptIdx] && attempts[activeAttemptIdx].settings) {
-      keyLabel = attempts[activeAttemptIdx].settings.keyLabel;
       meter = attempts[activeAttemptIdx].settings.meter;
     } else {
-      keyLabel = document.getElementById("keySelect").selectedOptions[0].text;
       meter = document.getElementById("meterSelect").value;
     }
-    const shareTitle = "Sight Reading Score — " + keyLabel + " " + meter;
+    const shareTitle = "Sight Reading Demo Score — " + meter;
 
     if (navigator.canShare && navigator.canShare({ files: [file] })) {
       try {
@@ -1158,13 +1116,11 @@
       files.push(new File([imgBlob], "sightreading-score.png", { type: "image/png" }));
     }
 
-    let keyLabel = "";
     let meter = "";
     if (attempt.settings) {
-      keyLabel = attempt.settings.keyLabel;
       meter = attempt.settings.meter;
     }
-    const shareTitle = "Sight Reading Recording — " + keyLabel + " " + meter;
+    const shareTitle = "Sight Reading Demo Recording — " + meter;
 
     if (navigator.canShare && navigator.canShare({ files: files })) {
       try {
@@ -1221,13 +1177,9 @@
   let activeAttemptIdx = -1; // Which attempt is currently displayed
 
   function generate() {
-    const seedStr = String(Math.random()).slice(2);
-    seedPRNG(seedStr);
-    lastUsedSeed = seedStr;
-
-    const keyName    = document.getElementById("keySelect").value;
+    const keyName    = "G";
     currentMeter     = document.getElementById("meterSelect").value;
-    const difficulty = document.getElementById("difficultySelect").value;
+    const difficulty = "easy";
     currentNumMeasures = parseInt(document.getElementById("measuresSelect").value, 10);
     currentBpm       = parseInt(document.getElementById("bpmSelect").value, 10);
     currentKeyDef    = KEY_DEFS[keyName];
@@ -1241,7 +1193,6 @@
     clearStatus();
     clearAttempts();
     stopPlayback();
-    document.getElementById("dailyBanner").style.display = "none";
 
     document.getElementById("recordBtn").disabled = false;
     document.getElementById("playBtn").disabled = false;
@@ -1404,11 +1355,10 @@
 
       // Store this attempt with its settings
       const attemptSettings = {
-        keyLabel: document.getElementById("keySelect").selectedOptions[0].text,
+        keyLabel: "Demo",
         meter: currentMeter,
         bpm: currentBpm,
-        difficulty: document.getElementById("difficultySelect").value,
-        seed: lastUsedSeed,
+        difficulty: "easy",
       };
       // Wait for audio blob to be ready before storing attempt
       audioReady.then(function () {
@@ -1417,19 +1367,6 @@
       });
       attempts.push({ scoreResult, settings: attemptSettings });
       activeAttemptIdx = attempts.length - 1;
-
-      // Save to persistent score history
-      saveScoreToHistory({
-        score: scoreResult.score,
-        key: attemptSettings.keyLabel,
-        meter: currentMeter,
-        bpm: currentBpm,
-        difficulty: attemptSettings.difficulty,
-        measures: currentNumMeasures,
-        seed: lastUsedSeed,
-        date: new Date().toISOString(),
-        stoppedEarly: !!stoppedEarly,
-      });
 
       colorNoteElements(scoreResult);
       showScore(scoreResult);
@@ -1722,159 +1659,12 @@
     document.getElementById("shareRecordingBtn").disabled = !hasAudio;
   }
 
-  // ==========================================================
-  // 17. SCORE HISTORY (localStorage)
-  // ==========================================================
-
-  const SCORE_HISTORY_KEY = "sightreading-score-history";
-
-  function escHtml(s) {
-    return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-  }
-
-  function loadScoreHistory() {
-    try {
-      return JSON.parse(localStorage.getItem(SCORE_HISTORY_KEY)) || [];
-    } catch (e) { return []; }
-  }
-
-  function saveScoreToHistory(entry) {
-    const history = loadScoreHistory();
-    history.push(entry);
-    try { localStorage.setItem(SCORE_HISTORY_KEY, JSON.stringify(history)); }
-    catch (e) { /* storage full */ }
-  }
-
-  function showHistory() {
-    const history = loadScoreHistory();
-    const modal = document.getElementById("historyModal");
-    const content = document.getElementById("historyContent");
-
-    const ranges = [
-      { label: "S (95\u2013100%)", cls: "grade-s" },
-      { label: "A (80\u201394%)", cls: "grade-a" },
-      { label: "B (60\u201379%)", cls: "grade-b" },
-      { label: "C (40\u201359%)", cls: "grade-c" },
-      { label: "D (0\u201339%)", cls: "grade-d" },
-      { label: "DNF", cls: "grade-dnf" },
-    ];
-
-    const counts = ranges.map(() => 0);
-    for (const e of history) {
-      if (e.stoppedEarly) counts[5]++;
-      else if (e.score >= 95) counts[0]++;
-      else if (e.score >= 80) counts[1]++;
-      else if (e.score >= 60) counts[2]++;
-      else if (e.score >= 40) counts[3]++;
-      else counts[4]++;
-    }
-
-    const maxCount = Math.max(...counts, 1);
-
-    let html = '<h2 class="history-title">\uD83D\uDCCA Score History</h2>';
-    html += '<div class="history-total">Total Exercises Completed: <strong>' + history.length + '</strong></div>';
-
-    html += '<div class="history-chart">';
-    for (let i = 0; i < ranges.length; i++) {
-      const pct = Math.round((counts[i] / maxCount) * 100);
-      html += '<div class="history-row">' +
-        '<span class="history-label">' + ranges[i].label + '</span>' +
-        '<div class="history-bar-bg">' +
-          '<div class="history-bar ' + ranges[i].cls + '" style="width:' + pct + '%"></div>' +
-        '</div>' +
-        '<span class="history-count">' + counts[i] + '</span>' +
-      '</div>';
-    }
-    html += '</div>';
-
-    if (history.length > 0) {
-      html += '<h3 class="history-subtitle">Recent Scores</h3>';
-      html += '<div class="history-recent">';
-      const recent = history.slice(-10).reverse();
-      for (const r of recent) {
-        const d = new Date(r.date).toLocaleDateString();
-        html += '<div class="history-entry">' +
-          '<span class="history-entry-score">' + (r.stoppedEarly ? 'DNF' : r.score + '%') + '</span>' +
-          '<span class="history-entry-detail">' + escHtml(r.key) + ' ' + escHtml(r.meter) + ' ' + escHtml(r.difficulty) + ' ' + r.bpm + 'bpm</span>' +
-          '<span class="history-entry-seed">Seed: ' + escHtml(r.seed || '\u2014') + '</span>' +
-          '<span class="history-entry-date">' + d + '</span>' +
-        '</div>';
-      }
-      html += '</div>';
-    }
-
-    content.innerHTML = html;
-    modal.style.display = "flex";
-  }
-
-  function hideHistory() {
-    document.getElementById("historyModal").style.display = "none";
-  }
-
-  function dailyChallenge() {
-    const now = new Date();
-    const dateStr = now.getUTCFullYear() + "-" +
-      String(now.getUTCMonth() + 1).padStart(2, "0") + "-" +
-      String(now.getUTCDate()).padStart(2, "0");
-    seedPRNG(dateStr);
-    lastUsedSeed = dateStr;
-
-    // Pick settings deterministically from the seed
-    const keys = Object.keys(KEY_DEFS);
-    const diffs = ["easy", "medium", "hard"];
-    const meters = ["4/4", "3/4"];
-    const measureOpts = [4, 8];
-    const bpmOpts = [50, 60, 70, 80];
-
-    const keyName = keys[Math.floor(seededRandom() * keys.length)];
-    const difficulty = diffs[Math.floor(seededRandom() * diffs.length)];
-    const meter = meters[Math.floor(seededRandom() * meters.length)];
-    const numMeasures = 4;
-    const bpm = bpmOpts[Math.floor(seededRandom() * bpmOpts.length)];
-
-    // Set the UI dropdowns to match
-    document.getElementById("keySelect").value = keyName;
-    document.getElementById("meterSelect").value = meter;
-    document.getElementById("difficultySelect").value = difficulty;
-    document.getElementById("measuresSelect").value = String(numMeasures);
-    document.getElementById("bpmSelect").value = String(bpm);
-
-    currentMeter = meter;
-    currentNumMeasures = numMeasures;
-    currentBpm = bpm;
-    currentKeyDef = KEY_DEFS[keyName];
-
-    // Re-seed for melody generation (so melody is also deterministic)
-    seedPRNG(dateStr + "-melody");
-
-    currentMeasures = generateMelody(keyName, currentMeter, difficulty, currentNumMeasures);
-    currentExpectedNotes = buildExpectedNotes(currentMeasures, currentBpm, currentMeter);
-
-    const abc = melodyToAbc(currentMeasures, currentKeyDef, currentMeter);
-    render(abc);
-    hideScore();
-    clearStatus();
-    clearAttempts();
-    stopPlayback();
-
-    document.getElementById("recordBtn").disabled = false;
-    document.getElementById("playBtn").disabled = false;
-    document.getElementById("dailyBanner").textContent = "\uD83C\uDF1F Daily Challenge — " + dateStr;
-    document.getElementById("dailyBanner").style.display = "block";
-  }
-
   // Wire up
   document.getElementById("generateBtn").addEventListener("click", generate);
-  document.getElementById("dailyChallengeBtn").addEventListener("click", dailyChallenge);
   document.getElementById("playBtn").addEventListener("click", togglePlayback);
   document.getElementById("recordBtn").addEventListener("click", startRecording);
   document.getElementById("shareBtn").addEventListener("click", shareScore);
   document.getElementById("shareRecordingBtn").addEventListener("click", shareRecording);
-  document.getElementById("historyBtn").addEventListener("click", showHistory);
-  document.getElementById("historyCloseBtn").addEventListener("click", hideHistory);
-  document.getElementById("historyModal").addEventListener("click", function (e) {
-    if (e.target === this) hideHistory();
-  });
   document.getElementById("metronomeMuteBtn").addEventListener("click", function () {
     metronomeMuted = !metronomeMuted;
     this.classList.toggle("muted", metronomeMuted);
