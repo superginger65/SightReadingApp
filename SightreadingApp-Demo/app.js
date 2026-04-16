@@ -1399,7 +1399,7 @@
   let highlightedEl = null;
   let metronomeGainNode = null;
   let playbackMasterGain = null; // master output node — disconnect to kill all sound
-  let activeAudioEls = [];       // HTMLAudioElements currently playing
+  let activeSources = [];        // AudioBufferSourceNodes currently playing
   const HIGHLIGHT_COLOR = "#3a6ea5";
 
   // --- Audio sample mapping: MIDI → filename ---
@@ -1412,41 +1412,62 @@
     74: "audio/D2.mp3",   // D5
   };
 
-  // Preload samples into browser cache using Audio elements
-  (function preloadSamples() {
-    Object.values(MIDI_SAMPLE_MAP).forEach(function (url) {
-      var a = new Audio();
-      a.preload = "auto";
-      a.src = url;
-    });
-  })();
+  // Decoded AudioBuffer cache (keyed by MIDI number)
+  const sampleBuffers = {};
+  let samplesLoaded = false;
+
+  /**
+   * Decode all MP3 samples into AudioBuffers.
+   * Must be called after an AudioContext exists (created on user gesture).
+   */
+  async function loadSampleBuffers(ctx) {
+    if (samplesLoaded) return;
+    const entries = Object.entries(MIDI_SAMPLE_MAP);
+    await Promise.all(entries.map(async function ([midi, url]) {
+      // Resolve the full URL for diagnostics
+      const fullUrl = new URL(url, window.location.href).href;
+      try {
+        const resp = await fetch(fullUrl);
+        if (!resp.ok) {
+          console.error("Audio load failed: HTTP " + resp.status + " for " + fullUrl);
+          return;
+        }
+        const arrayBuf = await resp.arrayBuffer();
+        sampleBuffers[midi] = await ctx.decodeAudioData(arrayBuf);
+      } catch (e) {
+        console.error("Audio load failed for " + fullUrl, e);
+      }
+    }));
+    samplesLoaded = true;
+  }
 
   function midiToHz(midi) {
     return 440 * Math.pow(2, (midi - 69) / 12);
   }
 
   /**
-   * Schedule a note to play at a given delay (ms) using HTMLAudioElement.
-   * Works with file:// protocol and any server — no fetch needed.
+   * Schedule a note to play at a precise Web Audio time using AudioBufferSourceNode.
+   * This works reliably on mobile because it goes through the AudioContext.
    */
-  function scheduleNote(midi, delayMs, durationSec) {
-    const url = MIDI_SAMPLE_MAP[midi];
-    if (!url) return;
+  function scheduleNote(midi, audioTime, durationSec, ctx, dest) {
+    const buf = sampleBuffers[midi];
+    if (!buf) return;
 
-    const tid = setTimeout(function () {
-      if (!isPlaying) return;
-      var audio = new Audio(url);
-      audio.volume = 1.0;
-      activeAudioEls.push(audio);
-      audio.play().catch(function () {});
-      // Stop after note duration
-      var stopTid = setTimeout(function () {
-        audio.pause();
-        audio.currentTime = 0;
-      }, durationSec * 1000);
-      playbackTimeouts.push(stopTid);
-    }, delayMs);
-    playbackTimeouts.push(tid);
+    const source = ctx.createBufferSource();
+    source.buffer = buf;
+
+    const noteGain = ctx.createGain();
+    noteGain.gain.setValueAtTime(1.0, audioTime);
+    // Smooth 50ms fade-out at end of note to avoid pop
+    const fadeStart = audioTime + durationSec - 0.05;
+    noteGain.gain.setValueAtTime(1.0, fadeStart);
+    noteGain.gain.linearRampToValueAtTime(0, audioTime + durationSec);
+
+    source.connect(noteGain);
+    noteGain.connect(dest);
+    source.start(audioTime);
+    source.stop(audioTime + durationSec + 0.01);
+    activeSources.push({ source, gain: noteGain });
   }
 
   function getAllNoteRestEls() {
@@ -1494,11 +1515,14 @@
     }
     if (playbackCtx.state === "suspended") await playbackCtx.resume();
 
+    // Ensure MP3 samples are decoded (first call fetches, subsequent calls are instant)
+    await loadSampleBuffers(playbackCtx);
+
     // Master gain node — disconnect this to instantly kill metronome sound
     playbackMasterGain = playbackCtx.createGain();
     playbackMasterGain.connect(playbackCtx.destination);
 
-    activeAudioEls = [];
+    activeSources = [];
     isPlaying = true;
     const playBtn = document.getElementById("playBtn");
     playBtn.textContent = "\u25A0 Stop";
@@ -1556,13 +1580,18 @@
 
     const allEls = getAllNoteRestEls();
 
+    // Create a gain node for sample playback so stopPlayback can kill it
+    const sampleGain = playbackCtx.createGain();
+    sampleGain.connect(playbackMasterGain);
+
     for (let i = 0; i < currentExpectedNotes.length; i++) {
       const note = currentExpectedNotes[i];
       const noteDelayMs = countInMs + note.startTime * 1000;
+      const noteAudioTime = melodyBaseTime + note.startTime;
 
-      // Schedule audio for pitched notes via HTMLAudioElement
+      // Schedule audio for pitched notes via Web Audio API
       if (!note.isRest && note.midi != null) {
-        scheduleNote(note.midi, noteDelayMs, note.duration * 0.9);
+        scheduleNote(note.midi, noteAudioTime, note.duration * 0.9, playbackCtx, sampleGain);
       }
 
       // Schedule visual highlight
@@ -1592,18 +1621,27 @@
     clearHighlight();
     clearStatus();
 
-    // Disconnect master gain to instantly silence metronome
-    if (playbackMasterGain) {
-      playbackMasterGain.disconnect();
+    // Smooth 50ms fade-out on master gain, then disconnect
+    if (playbackMasterGain && playbackCtx) {
+      const now = playbackCtx.currentTime;
+      playbackMasterGain.gain.setValueAtTime(playbackMasterGain.gain.value, now);
+      playbackMasterGain.gain.linearRampToValueAtTime(0, now + 0.05);
+      // Disconnect after fade completes
+      var masterRef = playbackMasterGain;
+      setTimeout(function () {
+        masterRef.disconnect();
+      }, 80);
       playbackMasterGain = null;
     }
 
-    // Stop all active sample audio elements
-    for (const audio of activeAudioEls) {
-      audio.pause();
-      audio.currentTime = 0;
-    }
-    activeAudioEls = [];
+    // Stop all active sample sources after fade
+    var srcCopy = activeSources.slice();
+    setTimeout(function () {
+      for (const item of srcCopy) {
+        try { item.source.stop(); } catch (e) {}
+      }
+    }, 80);
+    activeSources = [];
 
     const playBtn = document.getElementById("playBtn");
     playBtn.textContent = "\u25B6 Play";
