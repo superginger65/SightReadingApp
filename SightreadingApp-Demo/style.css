@@ -360,11 +360,11 @@ button:disabled {
 }
 
 .challenge-mode-btn {
-  background: #c0392b;
+  background: #2b4ec0;
 }
 
 .challenge-mode-btn:hover {
-  background: #a93226;
+  background: #243a8a;
 }
 
 /* ---------- Mode Label ---------- */

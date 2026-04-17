@@ -915,7 +915,7 @@
     const el = document.getElementById("scoreDisplay");
     el.innerHTML = "";
     el.style.display = "none";
-    document.getElementById("shareBtn").disabled = true;
+    // document.getElementById("shareBtn").disabled = true;
     document.getElementById("shareRecordingBtn").disabled = true;
   }
 
@@ -1400,7 +1400,7 @@
   let metronomeGainNode = null;
   let playbackMasterGain = null; // master output node — disconnect to kill all sound
   let activeSources = [];        // AudioBufferSourceNodes currently playing
-  const HIGHLIGHT_COLOR = "#3a6ea5";
+  const HIGHLIGHT_COLOR = "#00aaff";
 
   // --- Audio sample mapping: MIDI → filename ---
   const MIDI_SAMPLE_MAP = {
@@ -1730,7 +1730,7 @@ playBtn.textContent = "\u25B6 Begin";
       startRecording();
     }
   });
-  document.getElementById("shareBtn").addEventListener("click", shareScore);
+  // document.getElementById("shareBtn").addEventListener("click", shareScore);
   document.getElementById("shareRecordingBtn").addEventListener("click", shareRecording);
   document.getElementById("bpmSelect").addEventListener("change", function () {
     currentBpm = parseInt(this.value, 10);
