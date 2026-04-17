@@ -1372,7 +1372,7 @@
       renderAttemptButtons();
       setStatus("");
 
-      playBtn.textContent = "\u25B6 Play";
+      playBtn.textContent = "\u25B6 Begin";
       playBtn.classList.remove("playing");
       generateBtn.disabled = false;
       document.getElementById("shareBtn").disabled = false;
@@ -1590,8 +1590,10 @@
       const noteAudioTime = melodyBaseTime + note.startTime;
 
       // Schedule audio for pitched notes via Web Audio API
+      // Advance audio by 40ms so samples play slightly before the click
+      // (samples have slight decode/playback latency)
       if (!note.isRest && note.midi != null) {
-        scheduleNote(note.midi, noteAudioTime, note.duration * 0.9, playbackCtx, sampleGain);
+        scheduleNote(note.midi, noteAudioTime - 0.04, note.duration * 0.9, playbackCtx, sampleGain);
       }
 
       // Schedule visual highlight
@@ -1644,7 +1646,7 @@
     activeSources = [];
 
     const playBtn = document.getElementById("playBtn");
-    playBtn.textContent = "\u25B6 Play";
+playBtn.textContent = "\u25B6 Begin";
     playBtn.classList.remove("playing");
 
     // Re-enable buttons if we have a melody
