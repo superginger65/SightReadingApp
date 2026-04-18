@@ -1739,6 +1739,10 @@ playBtn.textContent = "\u25B6 Begin";
     const btn = document.getElementById("switchModeBtn");
     if (!btn) return;
     btn.textContent = currentMode === "practice" ? "Switch to Challenge" : "Switch to Practice";
+    
+    // Update button styling to match current mode
+    btn.classList.remove("active-practice", "active-challenge");
+    btn.classList.add(currentMode === "practice" ? "active-challenge" : "active-practice");
   }
 
   // Wire up
