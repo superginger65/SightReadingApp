@@ -74,19 +74,19 @@
     easy: {
       maxInterval: 4, stepBias: 0.75,
       rhythms34: ["2", "1", "1 1"],
-      rhythms44: ["2", "1", "1 1", "1 1 1"],
+      rhythms44: ["2", "1", "1 1", "1 1 2","1 1 1"],
       restChance: 0.05, allowSyncopation: false,
     },
     medium: {
       maxInterval: 5, stepBias: 0.55,
       rhythms34: ["2", "1", "1 1", "3", "1/2 1/2 1", "1 1/2 1/2"],
-      rhythms44: ["2", "1", "1 1", "1 1 1", "4", "1/2 1/2 1 1", "2 1 1"],
+      rhythms44: ["2", "1", "1 1", "1 1 2", "1 1 1", "4", "1/2 1/2 1 1", "2 1 1"],
       restChance: 0.08, allowSyncopation: false,
     },
     hard: {
       maxInterval: 7, stepBias: 0.40,
       rhythms34: ["2", "1", "1 1", "3", "1/2 1/2 1", "1 1/2 1/2", "1/2 1/2 1/2 1/2 1/2 1/2"],
-      rhythms44: ["2", "1", "1 1", "1 1 1", "4", "1/2 1/2 1 1", "2 1 1", "1/2 1/2 1/2 1/2 1 1", "3 1"],
+      rhythms44: ["2", "1", "1 1", "1 1 2", "1 1 1", "4", "1/2 1/2 1 1", "2 1 1", "1/2 1/2 1/2 1/2 1 1", "3 1"],
       restChance: 0.10, allowSyncopation: true,
     }
   };
