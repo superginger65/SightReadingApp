@@ -392,3 +392,31 @@ button:disabled {
 body[data-mode="practice"] .challenge-only {
   display: none !important;
 }
+
+/* ---------- Mode Switch Button ---------- */
+.mode-switch-container {
+  display: flex;
+  justify-content: center;
+  margin: 20px 0 10px;
+}
+
+.mode-switch-btn {
+  padding: 10px 28px;
+  font-size: 15px;
+  font-weight: 600;
+  border: 2px solid #888;
+  border-radius: 8px;
+  background: #f5f5f5;
+  color: #333;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.mode-switch-btn:hover {
+  background: #e0e0e0;
+  border-color: #555;
+}
+
+.mode-switch-btn:active {
+  transform: scale(0.97);
+}

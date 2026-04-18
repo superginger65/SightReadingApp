@@ -1718,7 +1718,27 @@ playBtn.textContent = "\u25B6 Begin";
     const label = mode === "practice" ? "* Demo \u2014 Practice" : "* Demo \u2014 Challenge";
     document.getElementById("modeLabel").textContent = label;
 
+    updateModeSwitchButton();
     generate();
+  }
+
+  // --- Mode switch ---
+  function switchMode() {
+    const newMode = currentMode === "practice" ? "challenge" : "practice";
+    currentMode = newMode;
+    document.body.setAttribute("data-mode", newMode);
+
+    const label = newMode === "practice" ? "* Demo \u2014 Practice" : "* Demo \u2014 Challenge";
+    document.getElementById("modeLabel").textContent = label;
+
+    updateModeSwitchButton();
+    generate();
+  }
+
+  function updateModeSwitchButton() {
+    const btn = document.getElementById("switchModeBtn");
+    if (!btn) return;
+    btn.textContent = currentMode === "practice" ? "Switch to Challenge" : "Switch to Practice";
   }
 
   // Wire up
@@ -1732,6 +1752,7 @@ playBtn.textContent = "\u25B6 Begin";
   });
   // document.getElementById("shareBtn").addEventListener("click", shareScore);
   document.getElementById("shareRecordingBtn").addEventListener("click", shareRecording);
+  document.getElementById("switchModeBtn").addEventListener("click", switchMode);
   document.getElementById("bpmSelect").addEventListener("change", function () {
     currentBpm = parseInt(this.value, 10);
     if (currentMeasures && currentMeter) {
