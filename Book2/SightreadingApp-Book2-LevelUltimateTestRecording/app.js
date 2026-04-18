@@ -1463,7 +1463,7 @@
   let highlightedEl = null;
   let metronomeGainNode = null;
   let metronomeMuted = false;
-  const HIGHLIGHT_COLOR = "#3a6ea5";
+  const HIGHLIGHT_COLOR = "#00aaff";
 
   function midiToHz(midi) {
     return 440 * Math.pow(2, (midi - 69) / 12);

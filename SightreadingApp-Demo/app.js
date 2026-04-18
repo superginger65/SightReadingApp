@@ -1351,6 +1351,27 @@
       : 0;
     const scoreResult = scoreMelody(currentExpectedNotes, detected, recordingDuration);
     scoreResult.stoppedEarly = !!stoppedEarly;
+    if (scoreResult.stoppedEarly) {
+      // Include all remaining notes as missed to get a true percentage of the full piece
+      const evaluatedCount = scoreResult.results.filter(r => r.evaluated).length;
+      const totalNotes = currentExpectedNotes.length;
+      if (evaluatedCount < totalNotes) {
+        // Add missed notes for the remaining measures
+        for (let i = evaluatedCount; i < totalNotes; i++) {
+          scoreResult.results.push({
+            expected: currentExpectedNotes[i],
+            matched: false,
+            detectedNote: null,
+            pitchCorrect: false,
+            evaluated: true,
+          });
+        }
+        scoreResult.totalNotes = totalNotes;
+        scoreResult.correctNotes = scoreResult.results.filter(r => r.pitchCorrect).length;
+        scoreResult.matchedNotes = scoreResult.results.filter(r => r.matched).length;
+        scoreResult.score = Math.round((scoreResult.correctNotes / scoreResult.totalNotes) * 100);
+      }
+    }
 
       // Store this attempt with its settings
       const attemptSettings = {
