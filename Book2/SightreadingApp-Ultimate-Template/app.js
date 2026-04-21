@@ -560,6 +560,43 @@
   }
 
   // ==========================================================
+  // 9. METRONOME
+  // ==========================================================
+
+  function playClick(audioCtx, time, isAccent, dest) {
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.connect(gain);
+    gain.connect(dest || audioCtx.destination);
+    osc.frequency.value = isAccent ? 1000 : 800;
+    gain.gain.setValueAtTime(isAccent ? 0.3 : 0.15, time);
+    gain.gain.exponentialRampToValueAtTime(0.001, time + 0.05);
+    osc.start(time);
+    osc.stop(time + 0.05);
+  }
+
+  function scheduleMetronome(audioCtx, bpm, meter, numMeasures, countInBars, dest) {
+    const secPerBeat = 60 / bpm;
+    const beatsPerMeasure = meter === "3/4" ? 3 : 4;
+    const totalBars = countInBars + numMeasures;
+    const totalBeats = totalBars * beatsPerMeasure;
+    const startTime = audioCtx.currentTime + 0.1;
+    const countInDuration = countInBars * beatsPerMeasure * secPerBeat;
+
+    for (let beat = 0; beat < totalBeats; beat++) {
+      const time = startTime + beat * secPerBeat;
+      const isAccent = (beat % beatsPerMeasure) === 0;
+      playClick(audioCtx, time, isAccent, dest);
+    }
+
+    return {
+      countInEndTime: startTime + countInDuration,
+      recordingEndTime: startTime + totalBeats * secPerBeat,
+      startTime,
+    };
+  }
+
+  // ==========================================================
   // 10. NOTE SEGMENTATION
   // ==========================================================
 
@@ -1162,6 +1199,7 @@
   let recordingTimeouts = [];   // setTimeout IDs for recording flow
   let recordingInterval = null;  // countdown interval
   let recordingActive = false;   // true from click to scoring complete
+  let recordMetronomeGain = null; // gain node for recording metronome (to silence on early stop)
   let mediaRecorder = null;      // MediaRecorder for capturing audio
   let audioChunks = [];           // chunks from MediaRecorder
 
@@ -1195,6 +1233,10 @@
     render(abc);
 
     const countInBars = 1;
+    recordMetronomeGain = audioCtx.createGain();
+    recordMetronomeGain.connect(audioCtx.destination);
+    scheduleMetronome(audioCtx, currentBpm, currentMeter, currentNumMeasures, countInBars, recordMetronomeGain);
+
     const beatsPerMeasure = currentMeter === "3/4" ? 3 : 4;
     const secPerBeat = 60 / currentBpm;
     const countInBeats = countInBars * beatsPerMeasure;
@@ -1284,6 +1326,13 @@
         resolve();
       }
     });
+
+    if (recordMetronomeGain) {
+      recordMetronomeGain.gain.cancelScheduledValues(0);
+      recordMetronomeGain.gain.setValueAtTime(0, 0);
+      recordMetronomeGain.disconnect();
+      recordMetronomeGain = null;
+    }
 
     setStatus("Analyzing...");
 
@@ -1471,6 +1520,12 @@
 
     const baseTime = playbackCtx.currentTime + 0.1;
 
+    // Schedule count-in clicks
+    for (let beat = 0; beat < countInBeats; beat++) {
+      const time = baseTime + beat * secPerBeat;
+      playClick(playbackCtx, time, beat === 0, playbackCtx.destination);
+    }
+
     // Count-in display (counts up: 1, 2, 3, 4...)
     let countUpBeat = 1;
     setStatus("Count in: " + countUpBeat);
@@ -1488,6 +1543,13 @@
     // --- After count-in: schedule melody + metronome ---
     const melodyBaseTime = baseTime + countInDuration;
     const countInMs = countInDuration * 1000;
+
+    // Schedule melody metronome clicks
+    const totalBeats = currentNumMeasures * beatsPerMeasure;
+    for (let beat = 0; beat < totalBeats; beat++) {
+      const time = melodyBaseTime + beat * secPerBeat;
+      playClick(playbackCtx, time, (beat % beatsPerMeasure) === 0, playbackCtx.destination);
+    }
 
     const allEls = getAllNoteRestEls();
 
